@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Search, Filter, Download } from 'lucide-react';
 import { EventsTable } from '../components/dashboard/EventsTable';
 import { MediaModal } from '../components/dashboard/MediaModal';
-import { API_BASE_URL } from '../config'; 
 import type { EventoLPR } from '../types';
+import { API_BASE_URL } from '../config'; 
 
 export function History() {
   const [eventos, setEventos] = useState<EventoLPR[]>([]);
@@ -16,6 +16,7 @@ export function History() {
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
 
   useEffect(() => {
+    // CORREÇÃO: Usando a URL dinâmica
     fetch(`${API_BASE_URL}/eventos/`)
       .then(res => res.json())
       .then(data => {
