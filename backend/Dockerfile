@@ -1,11 +1,11 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bullseye
 
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg2 \
     unixodbc \
     unixodbc-dev \
-    ffmpeg \ 
+    ffmpeg \
     && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
     && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
