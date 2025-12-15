@@ -30,6 +30,8 @@ def get_db():
     try: yield db
     finally: db.close()
 
+
+
 def processar_evento_camera(placa: str, origem: str):
     print(f" Nova placa detectada: {placa}")
     
@@ -47,15 +49,23 @@ def processar_evento_camera(placa: str, origem: str):
     if config and config.is_active:
         origem_dado = "REAL"
         try:
-            final_snapshot_url = salvar_snapshot_camera(
-                config.ip_address, config.username, config.password, placa
+            nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
+            nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
+
+            salvar_snapshot_camera(
+                config.ip_address, 
+                config.username, 
+                config.password, 
+                placa, 
+                nome_fixo=nome_arquivo_foto  
             )
             
-            nome_video = f"{placa}_{timestamp_file}.mp4"
+            final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
+            
             gravar_video_evento(
-                config.ip_address, config.username, config.password, nome_video, duracao=15
+                config.ip_address, config.username, config.password, nome_arquivo_video, duracao=15
             )
-            final_video_url = f"/imagens/videos/{nome_video}"
+            final_video_url = f"/imagens/videos/{nome_arquivo_video}"
             
         except Exception as e:
             print(f"Erro ao capturar mídia real: {e}")
@@ -64,16 +74,10 @@ def processar_evento_camera(placa: str, origem: str):
         final_snapshot_url = "/imagens/mock.jpg"
         final_video_url = "/imagens/mock.jpg"
 
-    
     dados_erp = {
-        'ticket_id': 0,         
-        'status_ticket': 'ABERTO',  
-        'fornecedor': '',           
-        'produto': '',              
-        'nota_fiscal': '',          
-        'tipo_veiculo': 'CAMINHAO', 
-        'peso_nf': 0,               
-        'peso_balanca': 0           
+        'ticket_id': 0, 'status_ticket': 'ABERTO', 'fornecedor': '',           
+        'produto': '', 'nota_fiscal': '', 'tipo_veiculo': 'CAMINHAO', 
+        'peso_nf': 0, 'peso_balanca': 0           
     }
     
     try:
@@ -81,7 +85,6 @@ def processar_evento_camera(placa: str, origem: str):
             timestamp_registro=timestamp_str,
             placa_veiculo=placa,
             camera_nome=origem,
-            
             ticket_id=dados_erp['ticket_id'],
             status_ticket=dados_erp['status_ticket'],
             fornecedor_nome=dados_erp['fornecedor'],
@@ -90,20 +93,20 @@ def processar_evento_camera(placa: str, origem: str):
             tipo_veiculo=dados_erp['tipo_veiculo'],
             peso_nf=dados_erp['peso_nf'],
             peso_balanca=dados_erp['peso_balanca'],
-            
             origem_dado=origem_dado,
-            snapshot_url=final_snapshot_url,
-            video_url=final_video_url
+            snapshot_url=final_snapshot_url, # URL certa
+            video_url=final_video_url        # URL certa
         )
         db.add(evento)
         db.commit()
-        print(f"Evento salvo: Ticket #{evento.ticket_id} (Aguardando Edição Manual)")
+        print(f"Evento salvo: Ticket #{evento.ticket_id}")
         
     except Exception as e:
         print(f"Erro ao salvar no banco: {e}")
         db.rollback()
     finally:
         db.close()
+
 
 def reload_camera_service():
     """Lê o banco de dados e inicia/reinicia o serviço da câmera"""
