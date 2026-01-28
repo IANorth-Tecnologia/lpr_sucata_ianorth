@@ -2,7 +2,6 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# ----------------------------------------------------
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,7 +74,6 @@ def processar_evento_camera(placa: str, origem: str):
         final_snapshot_url = "/imagens/mock.jpg"
         final_video_url = "/imagens/mock.jpg"
 
-    # 2. Prepara objeto de dados ERP
     dados_erp = {
         'ticket_id': 0, 
         'status_ticket': 'N/A', 
@@ -257,6 +255,7 @@ def obter_detalhes_evento(evento_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Ticket não encontrado")
     return evento
 
+
 @app.get("/admin/sincronizar-antigos")
 def sincronizar_registros_antigos(db: Session = Depends(get_db)):
     """
@@ -275,7 +274,10 @@ def sincronizar_registros_antigos(db: Session = Depends(get_db)):
     
     for evento in eventos_pendentes:
         try:
-            data_registro = evento.timestamp_registro.split(" ")[0]
+            if isinstance(evento.timestamp_registro, str):
+                data_registro = evento.timestamp_registro.split(" ")[0]
+            else:
+                data_registro = evento.timestamp_registro.strftime("%Y-%m-%d")
             
             dados_api = sinobras.consultar_truck_arrival(evento.placa_veiculo, data_iso=data_registro)
             
@@ -290,13 +292,13 @@ def sincronizar_registros_antigos(db: Session = Depends(get_db)):
                 
                 evento.origem_dado = "SINOBRAS_API (Retroativo)"
                 
-                print(f"Evento {evento.id} ({evento.placa_veiculo}) atualizado com Ticket {evento.ticket_id}")
+                print(f" Evento {evento.id} ({evento.placa_veiculo}) atualizado com Ticket {evento.ticket_id}")
                 atualizados += 1
             else:
                 print(f"Evento {evento.id}: Placa {evento.placa_veiculo} não encontrada na data {data_registro}")
                 
         except Exception as e:
-            print(f"Erro ao processar evento {evento.id}: {e}")
+            print(f" Erro ao processar evento {evento.id}: {e}")
             erros += 1
             continue
 
