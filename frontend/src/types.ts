@@ -17,4 +17,7 @@ export interface EventoLPR {
     
     snapshot_url?: string | null;
     video_url?: string | null;
+
+    observacao?: string;
+    fotos_avaria?: string;
 }

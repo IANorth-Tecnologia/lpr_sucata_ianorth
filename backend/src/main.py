@@ -1,9 +1,11 @@
 import sys
 import os
+import shutil
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile 
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -176,6 +178,11 @@ async def lifespan(app: FastAPI):
     
     if monitor: monitor.stop()
 
+
+        
+
+
+
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -230,6 +237,7 @@ def atualizar_evento(evento_id: int, dados: schemas.EventoUpdate, db: Session = 
     if dados.tipo_veiculo is not None: evento.tipo_veiculo = dados.tipo_veiculo
     if dados.peso_nf is not None: evento.peso_nf = dados.peso_nf
     if dados.peso_balanca is not None: evento.peso_balanca = dados.peso_balanca
+    if dados.observacao is not None: evento.observacao = dados.observacao
 
     try:
         db.commit()
@@ -304,3 +312,35 @@ def sincronizar_registros_antigos(db: Session = Depends(get_db)):
         "atualizados_sucesso": atualizados,
         "falhas": erros
     }
+
+
+@app.post("/eventos/{evento_id}/upload-avaria")
+def upload_foto_avaria(evento_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    evento = db.query(models.EventoVMS).filter(models.EventoVMS.id == evento_id).first()
+    if not evento:
+        raise HTTPException(status_code=404, detail="Evento Não Encontrado")
+
+    timestamp_file = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nome_seguro = file.filename.replace(" ", "_")
+    nome_arquivo = f"avaria_{evento_id}_{timestamp_file}_{nome_seguro}"
+
+    caminho_fisico = os.path.join(static_dir, "snapshots", nome_arquivo)
+
+    try:
+        with open(caminho_fisico, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo: {e}")
+
+    url_relativa = f"/imagens/snapshots/{nome_arquivo}"
+
+    if evento.fotos_avaria:
+        evento.fotos_avaria += f",{url_relativa}"
+    else:
+        evento.fotos_avaria = url_relativa
+
+    db.commit()
+    db.refresh(evento)
+
+    return {"status": "Sucesso", "url": url_relativa, "lista_atual": evento.fotos_avaria}
+

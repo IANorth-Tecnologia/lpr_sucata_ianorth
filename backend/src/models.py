@@ -28,6 +28,9 @@ class EventoVMS(Base):
     snapshot_url = Column(String(500), nullable=True)
     video_url = Column(String(500), nullable=True)
 
+    observacao = Column(String(1000), nullable=True)
+    fotos_avaria = Column(String(4000), nullable=True)
+
 class CameraConfig(Base):
     __tablename__ = "camera_config"
 

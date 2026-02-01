@@ -11,6 +11,7 @@ class EventoUpdate(BaseModel):
     tipo_veiculo: Optional[str] = None
     peso_nf: Optional[float] = None
     peso_balanca: Optional[float] = None
+    observacao: Optional[str] = None
 
 class EventoLPRResponse(BaseModel):
     id: int
@@ -32,6 +33,9 @@ class EventoLPRResponse(BaseModel):
     snapshot_url: Optional[str] = None
     video_url: Optional[str] = None
     origem_dado: Optional[str] = None
+
+    observacao: Optional[str] = None
+    fotos_avaria: Optional[str] = None
 
     class Config:
         from_attributes = True

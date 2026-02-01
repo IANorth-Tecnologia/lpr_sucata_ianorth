@@ -14,6 +14,7 @@ export function TicketDetails() {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<EventoLPR>>({});
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -45,7 +46,8 @@ export function TicketDetails() {
                 tipo_veiculo: formData.tipo_veiculo,
                 peso_nf: Number(formData.peso_nf),
                 peso_balanca: Number(formData.peso_balanca),
-                status_ticket: formData.status_ticket
+                status_ticket: formData.status_ticket,
+                observacao: formData.observacao,
             })
         });
 
@@ -66,6 +68,42 @@ export function TicketDetails() {
 
   if (loading) return <div className="p-8 text-center text-slate-500">Carregando...</div>;
   if (!ticket) return <div className="p-8 text-center text-red-500">Ticket não encontrado.</div>;
+
+  const handleUploadAvaria = async (e: React.ChangeEvent<HTMLElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+
+        setUploading(true);
+        const dataUpload = new FormData();
+        dataUpload.append('file', file);
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/eventos/${id}/upload-avaria`,{
+                method: 'POST',
+                body: dataUpload
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const novaLista = ticket?.fotos_avaria
+                    ? `${ticket.fotos_avaria},${data.url}`
+                    : data.url;
+
+                if (ticket) setTicket({...ticket, fotos_avaria: novaLista});
+                setFormData(prev => ({...prev, fotos_avaria: novaLista}));
+            } else {
+                alert("Erro ao enviar imagem.");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Erro de conexão.")
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const listaFotos = ticket?.fotos_avaria ? ticket.fotos_avaria.split(',').filter(x => x) : [];
+
 
   const pesoBalanca = isEditing ? Number(formData.peso_balanca) : (ticket.peso_balanca || 0);
   const pesoNF = isEditing ? Number(formData.peso_nf) : (ticket.peso_nf || 0);
@@ -245,6 +283,59 @@ export function TicketDetails() {
                     </video>
                 ) : <span className="text-slate-500 text-sm">Sem gravação</span>}
             </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
+        <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <Edit3 size={18} className="text-orange-500"/> Classificação & Avarias
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Observações do Classificador
+                </label>
+                {isEditing ? (
+                    <textarea 
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 h-32 focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 dark:text-slate-200 resize-none"
+                        placeholder="Descreva avarias, objetos estranhos ou observações sobre a carga..."
+                        value={formData.observacao || ''}
+                        onChange={e => setFormData({...formData, observacao: e.target.value})}
+                    />
+                ) : (
+                    <div className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg p-3 h-32 overflow-y-auto text-slate-600 dark:text-slate-400 italic">
+                        {ticket?.observacao || 'Nenhuma observação registrada.'}
+                    </div>
+                )}
+            </div>
+
+            <div>
+                <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Fotos de Avaria / Detalhes
+                    </label>
+                    <label className="cursor-pointer bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs font-bold px-3 py-1 rounded-full hover:bg-orange-200 transition-colors flex items-center gap-1">
+                        <Camera size={14}/> 
+                        {uploading ? 'Enviando...' : 'Adicionar Foto'}
+                        <input type="file" className="hidden" accept="image/*" onChange={handleUploadAvaria} disabled={uploading} />
+                    </label>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                    {listaFotos.length > 0 ? (
+                        listaFotos.map((fotoUrl, idx) => (
+                            <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 relative group cursor-pointer" onClick={() => window.open(getMediaUrl(fotoUrl), '_blank')}>
+                                <img 
+                                    src={getMediaUrl(fotoUrl)} 
+                                    className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                                    alt={`Avaria ${idx}`}
+                                />
+                            </div>
+                        ))
+                    ) : (
+                        <div className="col-span-4 h-24 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center text-slate-400 text-sm">
+                            Sem fotos de avaria
+                        </div>
+                    )}
           </div>
         </div>
       </div>
