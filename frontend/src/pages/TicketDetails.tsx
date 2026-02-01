@@ -47,7 +47,7 @@ export function TicketDetails() {
                 peso_nf: Number(formData.peso_nf),
                 peso_balanca: Number(formData.peso_balanca),
                 status_ticket: formData.status_ticket,
-                observacao: formData.observacao,
+                observacao: formData.observacao 
             })
         });
 
@@ -66,49 +66,48 @@ export function TicketDetails() {
     }
   };
 
+  const handleUploadAvaria = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    setUploading(true);
+    const dataUpload = new FormData();
+    dataUpload.append('file', file);
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/eventos/${id}/upload-avaria`, {
+            method: 'POST',
+            body: dataUpload
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            const novaLista = ticket?.fotos_avaria 
+                ? `${ticket.fotos_avaria},${data.url}` 
+                : data.url;
+            
+            if (ticket) setTicket({ ...ticket, fotos_avaria: novaLista });
+            setFormData(prev => ({ ...prev, fotos_avaria: novaLista }));
+        } else {
+            alert("Erro ao enviar imagem.");
+        }
+    } catch (error) {
+        console.error(error);
+        alert("Erro de conexão.");
+    } finally {
+        setUploading(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500">Carregando...</div>;
   if (!ticket) return <div className="p-8 text-center text-red-500">Ticket não encontrado.</div>;
-
-  const handleUploadAvaria = async (e: React.ChangeEvent<HTMLElement>) => {
-        if (!e.target.files || e.target.files.length === 0) return;
-        const file = e.target.files[0];
-
-        setUploading(true);
-        const dataUpload = new FormData();
-        dataUpload.append('file', file);
-
-        try {
-            const res = await fetch(`${API_BASE_URL}/eventos/${id}/upload-avaria`,{
-                method: 'POST',
-                body: dataUpload
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                const novaLista = ticket?.fotos_avaria
-                    ? `${ticket.fotos_avaria},${data.url}`
-                    : data.url;
-
-                if (ticket) setTicket({...ticket, fotos_avaria: novaLista});
-                setFormData(prev => ({...prev, fotos_avaria: novaLista}));
-            } else {
-                alert("Erro ao enviar imagem.");
-            }
-        } catch (error) {
-            console.error(error);
-            alert("Erro de conexão.")
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const listaFotos = ticket?.fotos_avaria ? ticket.fotos_avaria.split(',').filter(x => x) : [];
-
 
   const pesoBalanca = isEditing ? Number(formData.peso_balanca) : (ticket.peso_balanca || 0);
   const pesoNF = isEditing ? Number(formData.peso_nf) : (ticket.peso_nf || 0);
   const divergencia = pesoBalanca - pesoNF;
   const temDivergencia = Math.abs(divergencia) > 100;
+
+  const listaFotos = ticket.fotos_avaria ? ticket.fotos_avaria.split(',').filter(x => x) : [];
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -283,6 +282,9 @@ export function TicketDetails() {
                     </video>
                 ) : <span className="text-slate-500 text-sm">Sem gravação</span>}
             </div>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
         <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
@@ -336,13 +338,14 @@ export function TicketDetails() {
                             Sem fotos de avaria
                         </div>
                     )}
-          </div>
+                </div>
+            </div>
         </div>
       </div>
+
     </div>
   );
 }
-
 
 function InfoRow({ label, value, highlight }: any) {
     return (
