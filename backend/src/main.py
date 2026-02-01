@@ -45,10 +45,10 @@ def processar_evento_camera(placa: str, origem: str):
     
     final_snapshot_url = None
     final_video_url = None
-    origem_dado = "MOCK"
+    origem_dado = "Desconhecido"
 
     if config and config.is_active:
-        origem_dado = "REAL"
+        origem_dado = "CAMERA_REAL"
         try:
             nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
             nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
@@ -76,11 +76,11 @@ def processar_evento_camera(placa: str, origem: str):
 
     dados_erp = {
         'ticket_id': 0, 
-        'status_ticket': 'N/A', 
+        'status_ticket': '', 
         'fornecedor': '',           
         'produto': '',
         'nota_fiscal': '',
-        'tipo_veiculo': 'CAMINHAO', 
+        'tipo_veiculo': '', 
         'peso_nf': 0, 
         'peso_balanca': 0           
     }
@@ -99,18 +99,12 @@ def processar_evento_camera(placa: str, origem: str):
             dados_erp['tipo_veiculo'] = dados_api.get('tipoVeiculo', 'Caminhao')
             dados_erp['peso_balanca'] = float(dados_api.get('pesagemInicial', 0.0))
         else:
-            print("Sinobras não retornou. Usando Mock local.")
-            origem_dado = "MOCK_FALLBACK"
-            mock_res = services_mock.consultar_sistemas_sinobras(placa)
-            
-            dados_erp['ticket_id'] = str(mock_res.get('ticket_id', 0))
-            dados_erp['status_ticket'] = mock_res.get('status_ticket', 'Simulado')
-            dados_erp['fornecedor'] = mock_res.get('fornecedor', 'Forn. Mock')
-            dados_erp['peso_balanca'] = mock_res.get('peso_balanca', 0.0)
-            dados_erp['peso_nf'] = 0
-
+            print("Placa não encontrada. Salvando registro vazio.")
+            origem_dado = "NAO_ENCONTRADO"
+           
     except Exception as e:
         print(f"Erro na integração de dados: {e}")
+        origem_dado = "ERRO_INTEGRACAO"
 
     try:
         evento = models.EventoVMS(
