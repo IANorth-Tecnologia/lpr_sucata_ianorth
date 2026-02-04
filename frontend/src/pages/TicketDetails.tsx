@@ -1,8 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Printer, Truck, Scale, MapPin, Calendar, Camera, PlayCircle, Edit3, Save, X } from 'lucide-react';
+import { 
+    ArrowLeft, Printer, Truck, Scale, MapPin, Calendar, 
+    Camera, PlayCircle, Edit3, Save, X, Trash2, Aperture, 
+    Monitor, Upload 
+} from 'lucide-react';
 import type { EventoLPR } from '../types';
 import { API_BASE_URL, getMediaUrl } from '../config'; 
+
+interface GarraConfig {
+    id: number;
+    nome: string;
+}
 
 export function TicketDetails() {
   const { id } = useParams();
@@ -15,10 +24,42 @@ export function TicketDetails() {
   const [formData, setFormData] = useState<Partial<EventoLPR>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  
+  const [listaGarras, setListaGarras] = useState<GarraConfig[]>([]);
+  const [cameraAtivaId, setCameraAtivaId] = useState<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [capturando, setCapturando] = useState(false);
 
   useEffect(() => {
     carregarDados();
+    carregarGarras();
   }, [id]);
+
+  useEffect(() => {
+    let intervalId: any;
+    
+    if (cameraAtivaId !== null) {
+        const atualizarImagem = () => {
+            const timestamp = new Date().getTime();
+            const url = `${API_BASE_URL}/proxy/snapshot/garra/${cameraAtivaId}?t=${timestamp}`;
+            setPreviewUrl(url);
+        };
+
+        atualizarImagem(); 
+        intervalId = setInterval(atualizarImagem, 800); 
+    } else {
+        setPreviewUrl(''); 
+    }
+
+    return () => { if (intervalId) clearInterval(intervalId); };
+  }, [cameraAtivaId]);
+
+  const carregarGarras = async () => {
+    try {
+        const res = await fetch(`${API_BASE_URL}/config/garras`);
+        if (res.ok) setListaGarras(await res.json());
+    } catch (e) { console.error(e); }
+  };
 
   const carregarDados = () => {
     fetch(`${API_BASE_URL}/eventos/${id}`)
@@ -55,7 +96,9 @@ export function TicketDetails() {
             const atualizado = await res.json();
             setTicket(atualizado);
             setIsEditing(false);
-            alert("Dados atualizados com sucesso!");
+            const btn = document.getElementById('btn-save');
+            if(btn) btn.innerText = "Salvo!";
+            setTimeout(() => { if(btn) btn.innerText = "Salvar Alterações" }, 2000);
         } else {
             alert("Erro ao salvar dados.");
         }
@@ -66,48 +109,74 @@ export function TicketDetails() {
     }
   };
 
-  const handleUploadAvaria = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCapturaGarra = async () => {
+    if (cameraAtivaId === null) return;
+    setCapturando(true);
+    try {
+        const res = await fetch(`${API_BASE_URL}/eventos/${id}/captura-remota`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ garra_id: cameraAtivaId })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            atualizarListaFotos(data.url);
+        } else {
+            alert("Falha na captura. Verifique a câmera.");
+        }
+    } catch (e) {
+        alert("Erro de conexão.");
+    } finally {
+        setCapturando(false);
+    }
+  };
+
+  const handleUploadManual = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
-    
     setUploading(true);
     const dataUpload = new FormData();
-    dataUpload.append('file', file);
-
+    dataUpload.append('file', e.target.files[0]);
     try {
         const res = await fetch(`${API_BASE_URL}/eventos/${id}/upload-avaria`, {
             method: 'POST',
             body: dataUpload
         });
-
         if (res.ok) {
             const data = await res.json();
-            const novaLista = ticket?.fotos_avaria 
-                ? `${ticket.fotos_avaria},${data.url}` 
-                : data.url;
-            
-            if (ticket) setTicket({ ...ticket, fotos_avaria: novaLista });
-            setFormData(prev => ({ ...prev, fotos_avaria: novaLista }));
-        } else {
-            alert("Erro ao enviar imagem.");
+            atualizarListaFotos(data.url);
         }
-    } catch (error) {
-        console.error(error);
-        alert("Erro de conexão.");
-    } finally {
-        setUploading(false);
-    }
+    } catch (error) { console.error(error); } finally { setUploading(false); }
   };
+
+  const handleDeleteFoto = async (fotoUrl: string) => {
+    if(!window.confirm("Confirmar exclusão desta evidência?")) return;
+    try {
+        const res = await fetch(`${API_BASE_URL}/eventos/${id}/remover-foto`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ foto_url: fotoUrl })
+        });
+        if(res.ok) {
+            const novaString = ticket?.fotos_avaria?.split(',')
+                .filter(url => url.trim() !== fotoUrl.trim())
+                .join(',');
+            setTicket(prev => prev ? ({...prev, fotos_avaria: novaString}) : null);
+            setFormData(prev => ({...prev, fotos_avaria: novaString}));
+        }
+    } catch (err) { alert("Erro ao deletar."); }
+  }
+
+  const atualizarListaFotos = (novaUrl: string) => {
+    const novaLista = ticket?.fotos_avaria ? `${ticket.fotos_avaria},${novaUrl}` : novaUrl;
+    if (ticket) setTicket({ ...ticket, fotos_avaria: novaLista });
+    setFormData(prev => ({ ...prev, fotos_avaria: novaLista }));
+  }
 
   if (loading) return <div className="p-8 text-center text-slate-500">Carregando...</div>;
   if (!ticket) return <div className="p-8 text-center text-red-500">Ticket não encontrado.</div>;
 
-  const pesoBalanca = isEditing ? Number(formData.peso_balanca) : (ticket.peso_balanca || 0);
-  const pesoNF = isEditing ? Number(formData.peso_nf) : (ticket.peso_nf || 0);
-  const divergencia = pesoBalanca - pesoNF;
-  const temDivergencia = Math.abs(divergencia) > 100;
-
   const listaFotos = ticket.fotos_avaria ? ticket.fotos_avaria.split(',').filter(x => x) : [];
+  const cameraAtivaNome = listaGarras.find(g => g.id === cameraAtivaId)?.nome;
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -116,7 +185,6 @@ export function TicketDetails() {
         <button onClick={() => navigate('/')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
           <ArrowLeft size={20} /> DashBoard
         </button>
-        
         <div className="flex gap-3">
             {!isEditing ? (
                 <>
@@ -132,7 +200,7 @@ export function TicketDetails() {
                     <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-slate-200 dark:bg-slate-700 px-4 py-2 rounded-lg font-medium hover:bg-red-100 hover:text-red-600 transition-colors">
                         <X size={18} /> Cancelar
                     </button>
-                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-500 transition-colors shadow-lg shadow-green-500/30">
+                    <button id="btn-save" onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-500 transition-colors shadow-lg shadow-green-500/30">
                         {saving ? 'Salvando...' : <><Save size={18} /> Salvar Alterações</>}
                     </button>
                 </>
@@ -145,14 +213,9 @@ export function TicketDetails() {
             <div className="flex items-center gap-3 mb-2">
                 <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded uppercase">Entrada</span>
                 <h1 className="text-3xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    Ticket #
-                    {isEditing ? (
-                        <input 
-                            type="number" 
-                            className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 w-40 focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={formData.ticket_id || ''}
-                            onChange={e => setFormData({...formData, ticket_id: Number(e.target.value)})}
-                        />
+                    Ticket #{isEditing ? (
+                        <input type="number" className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 w-40 focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={formData.ticket_id || ''} onChange={e => setFormData({...formData, ticket_id: Number(e.target.value)})} />
                     ) : ticket.ticket_id || '---'}
                 </h1>
             </div>
@@ -164,217 +227,188 @@ export function TicketDetails() {
         <div className={`px-4 py-2 rounded-lg border ${ticket.status_ticket === 'ABERTO' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
             <span className="block text-xs uppercase font-bold opacity-70">Status Atual</span>
             {isEditing ? (
-                <select 
-                    className="bg-transparent font-bold text-xl outline-none"
-                    value={formData.status_ticket || 'ABERTO'}
-                    onChange={e => setFormData({...formData, status_ticket: e.target.value})}
-                >
+                <select className="bg-transparent font-bold text-xl outline-none" value={formData.status_ticket || 'ABERTO'} onChange={e => setFormData({...formData, status_ticket: e.target.value})}>
                     <option value="ABERTO">ABERTO</option>
                     <option value="FECHADO">FECHADO</option>
                     <option value="BLOQUEADO">BLOQUEADO</option>
                 </select>
-            ) : (
-                <span className="text-xl font-bold">{ticket.status_ticket}</span>
-            )}
+            ) : <span className="text-xl font-bold">{ticket.status_ticket}</span>}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 h-full">
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <Truck size={18} className="text-blue-500"/> Dados do Transporte
-            </h3>
+        <div className="lg:col-span-1 space-y-6">
             
-            <div className="space-y-4">
-                <InfoRow label="Placa (LPR)" value={ticket.placa_veiculo} highlight />
-                
-                <InputRow label="Motorista" field="motorista" data={formData} setData={setFormData} editing={isEditing} />
-                <InputRow label="Tipo Veículo" field="tipo_veiculo" data={formData} setData={setFormData} editing={isEditing} />
-                
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-4">
-                    <InputRow label="Fornecedor" field="fornecedor_nome" data={formData} setData={setFormData} editing={isEditing} />
-                    <InputRow label="Nota Fiscal" field="nota_fiscal" data={formData} setData={setFormData} editing={isEditing} />
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Truck size={18} className="text-blue-500"/> Dados do Transporte
+                </h3>
+                <div className="space-y-4">
+                    <InfoRow label="Placa" value={ticket.placa_veiculo} highlight />
+                    <InputRow label="Motorista" field="motorista" data={formData} setData={setFormData} editing={isEditing} />
                     <InputRow label="Produto" field="produto_declarado" data={formData} setData={setFormData} editing={isEditing} />
+                    <InputRow label="Fornecedor" field="fornecedor_nome" data={formData} setData={setFormData} editing={isEditing} />
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-700">
+                        <span className="text-sm text-slate-500">Peso Balança</span>
+                        <span className="font-mono font-bold text-lg">{ticket.peso_balanca?.toLocaleString()} kg</span>
+                    </div>
                 </div>
             </div>
-          </div>
-        </div>
 
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 h-full">
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-              <Scale size={18} className="text-blue-500"/> Auditoria de Peso
-            </h3>
-            
-            <div className="space-y-6">
-              <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg">
-                <span className="text-xs text-slate-500 uppercase font-bold">Peso Declarado (NF)</span>
-                <div className="flex items-end gap-2">
-                    {isEditing ? (
-                        <input 
-                            type="number" 
-                            className="bg-white dark:bg-black border border-slate-300 dark:border-slate-700 rounded p-1 text-2xl font-mono w-full"
-                            value={formData.peso_nf || ''}
-                            onChange={e => setFormData({...formData, peso_nf: Number(e.target.value)})}
-                        />
-                    ) : (
-                        <div className="text-2xl font-mono text-slate-700 dark:text-slate-300">
-                            {pesoNF.toLocaleString()}
-                        </div>
-                    )}
-                    <span className="text-sm mb-1 text-slate-500">kg</span>
-                </div>
-              </div>
-
-              <div className="bg-slate-100 dark:bg-black p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500 uppercase font-bold">Peso Aferido (Balança)</span>
-                <div className="flex items-end gap-2">
-                    {isEditing ? (
-                        <input 
-                            type="number" 
-                            className="bg-white dark:bg-slate-800 border border-blue-500 rounded p-1 text-3xl font-bold font-mono w-full text-blue-600"
-                            value={formData.peso_balanca || ''}
-                            onChange={e => setFormData({...formData, peso_balanca: Number(e.target.value)})}
-                        />
-                    ) : (
-                        <div className="text-3xl font-bold font-mono text-slate-900 dark:text-white">
-                            {pesoBalanca.toLocaleString()}
-                        </div>
-                    )}
-                    <span className="text-sm mb-1 text-slate-500">kg</span>
-                </div>
-              </div>
-
-              <div className={`p-4 rounded-lg border flex justify-between items-center ${temDivergencia ? 'bg-red-50 text-red-800 border-red-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
-                <span className="font-medium">Divergência</span>
-                <span className="font-bold font-mono text-lg">{divergencia > 0 ? '+' : ''}{divergencia} kg</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-            <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
-                <Camera size={16} className="text-blue-500"/> <span className="font-semibold text-sm">Registro Fotográfico</span>
-            </div>
-            <div className="aspect-video bg-black flex items-center justify-center">
-                {ticket.snapshot_url ? (
-                    <img 
-                        src={getMediaUrl(ticket.snapshot_url)} 
-                        className="w-full h-full object-contain cursor-pointer hover:opacity-90 transition"
-                        onClick={() => window.open(getMediaUrl(ticket.snapshot_url), '_blank')}
-                    />
-                ) : <span className="text-slate-500 text-sm">Sem imagem</span>}
-            </div>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-            <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
-                <PlayCircle size={16} className="text-blue-500"/> <span className="font-semibold text-sm">Replay da Entrada</span>
-            </div>
-            <div className="aspect-video bg-black flex items-center justify-center">
-                {ticket.video_url ? (
-                    <video controls className="w-full h-full">
-                        <source src={getMediaUrl(ticket.video_url)} type="video/mp4" />
-                        Seu navegador não suporta vídeos.
-                    </video>
-                ) : <span className="text-slate-500 text-sm">Sem gravação</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
-        <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-            <Edit3 size={18} className="text-orange-500"/> Eventos & Impureza
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Observações do Classificador
-                </label>
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 flex-1">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                    <Edit3 size={18} className="text-orange-500"/> Notas do Classificador
+                </h3>
+                <p className="text-xs text-slate-500 mb-3">Registre aqui detalhes sobre a carga ou motivos das capturas.</p>
+                
                 {isEditing ? (
                     <textarea 
-                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 h-32 focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 dark:text-slate-200 resize-none"
-                        placeholder="Descreva impurezas, objetos estranhos ou observações sobre a carga..."
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 h-48 focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 dark:text-slate-200 resize-none shadow-inner"
+                        placeholder="Descreva impurezas, objetos estranhos..."
                         value={formData.observacao || ''}
                         onChange={e => setFormData({...formData, observacao: e.target.value})}
                     />
                 ) : (
-                    <div className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg p-3 h-32 overflow-y-auto text-slate-600 dark:text-slate-400 italic">
+                    <div className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg p-3 h-48 overflow-y-auto text-slate-600 dark:text-slate-400 italic">
                         {ticket?.observacao || 'Nenhuma observação registrada.'}
                     </div>
                 )}
             </div>
+        </div>
 
-            <div>
-                <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Fotos de Impurezas / Detalhes
-                    </label>
-                    <label className="cursor-pointer bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs font-bold px-3 py-1 rounded-full hover:bg-orange-200 transition-colors flex items-center gap-1">
-                        <Camera size={14}/> 
-                        {uploading ? 'Enviando...' : 'Adicionar Foto'}
-                        <input type="file" className="hidden" accept="image/*" onChange={handleUploadAvaria} disabled={uploading} />
-                    </label>
+        <div className="lg:col-span-2">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-full">
+                
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <Monitor className="text-red-500"/> Monitoramento de Descarga
+                        </h3>
+                        <label className="cursor-pointer flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-500 transition-colors">
+                            <Upload size={14}/> {uploading ? 'Enviando...' : 'Upload Manual'}
+                            <input type="file" className="hidden" accept="image/*" onChange={handleUploadManual} disabled={uploading} />
+                        </label>
+                    </div>
+
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                        {listaGarras.length > 0 ? listaGarras.map((cam) => (
+                            <button 
+                                key={cam.id}
+                                onClick={() => setCameraAtivaId(cam.id === cameraAtivaId ? null : cam.id)}
+                                className={`
+                                    flex-1 min-w-[100px] py-2 px-3 rounded-lg text-sm font-bold transition-all border
+                                    ${cameraAtivaId === cam.id 
+                                        ? 'bg-red-600 text-white border-red-700 shadow-md transform scale-105' 
+                                        : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600'}
+                                `}
+                            >
+                                {cam.nome}
+                            </button>
+                        )) : (
+                            <span className="text-sm text-slate-400">Nenhuma garra configurada no sistema.</span>
+                        )}
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2">
-                    {listaFotos.length > 0 ? (
-                        listaFotos.map((fotoUrl, idx) => (
-                            <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 relative group cursor-pointer" onClick={() => window.open(getMediaUrl(fotoUrl), '_blank')}>
-                                <img 
-                                    src={getMediaUrl(fotoUrl)} 
-                                    className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                                    alt={`Avaria ${idx}`}
-                                />
+                <div className="relative w-full bg-black aspect-video flex items-center justify-center group overflow-hidden">
+                    {cameraAtivaId !== null ? (
+                        <>
+                            {previewUrl ? (
+                                <img src={previewUrl} className="w-full h-full object-contain" alt="Live" />
+                            ) : (
+                                <div className="text-white flex flex-col items-center animate-pulse">
+                                    <Monitor size={32} className="mb-2"/> Conectando...
+                                </div>
+                            )}
+                            
+                            <div className="absolute top-4 left-4 bg-red-600/90 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-2 backdrop-blur-sm">
+                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                                AO VIVO: {cameraAtivaNome}
                             </div>
-                        ))
+                        </>
                     ) : (
-                        <div className="col-span-4 h-24 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center text-slate-400 text-sm">
-                            Sem fotos de avaria
+                        <div className="text-slate-600 flex flex-col items-center">
+                            <Aperture size={48} className="mb-2 opacity-50"/>
+                            <p className="font-medium">Selecione uma Garra acima para iniciar</p>
                         </div>
                     )}
                 </div>
+
+                <div className="p-4 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex justify-center">
+                    <button 
+                        onClick={handleCapturaGarra}
+                        disabled={cameraAtivaId === null || capturando}
+                        className={`
+                            flex items-center gap-3 px-8 py-3 rounded-full font-bold text-lg shadow-lg transition-all
+                            ${cameraAtivaId !== null 
+                                ? 'bg-red-600 hover:bg-red-500 text-white cursor-pointer hover:scale-105 active:scale-95' 
+                                : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'}
+                        `}
+                    >
+                        <Camera size={24} />
+                        {capturando ? 'CAPTURANDO...' : 'REGISTRAR IMPUREZA'}
+                    </button>
+                </div>
+
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex-1 min-h-[200px]">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex justify-between">
+                        Evidências Coletadas <span>{listaFotos.length} fotos</span>
+                    </h4>
+                    
+                    {listaFotos.length > 0 ? (
+                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                            {listaFotos.map((fotoUrl, idx) => (
+                                <div key={idx} className="relative group aspect-square bg-slate-200 dark:bg-slate-700 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600 shadow-sm transition hover:shadow-md">
+                                    <img 
+                                        src={getMediaUrl(fotoUrl)} 
+                                        className="w-full h-full object-cover cursor-pointer hover:opacity-90"
+                                        onClick={() => window.open(getMediaUrl(fotoUrl), '_blank')}
+                                        alt={`Evidência ${idx}`}
+                                    />
+                                    <button 
+                                        onClick={() => handleDeleteFoto(fotoUrl)}
+                                        className="absolute top-1 right-1 bg-red-600/90 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-700 transform hover:scale-110 shadow-sm"
+                                        title="Excluir Evidência"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg p-8">
+                            <Camera size={24} className="mb-2 opacity-50"/>
+                            Nenhuma evidência registrada neste ticket.
+                        </div>
+                    )}
+                </div>
+
             </div>
         </div>
-      </div>
 
+      </div>
     </div>
   );
 }
 
 function InfoRow({ label, value, highlight }: any) {
     return (
-        <div className="flex justify-between items-center border-b border-slate-50 dark:border-slate-700/50 pb-2 last:border-0 last:pb-0 h-10">
+        <div className="flex justify-between items-center border-b border-slate-50 dark:border-slate-700/50 pb-2 last:border-0 last:pb-0 h-8">
             <span className="text-sm text-slate-500 w-1/3">{label}</span>
-            <span className={`font-medium text-right w-2/3 truncate ${highlight ? 'text-lg font-mono font-bold bg-slate-100 dark:bg-slate-900 px-2 rounded' : 'text-slate-700 dark:text-slate-200'}`}>
-                {value || '---'}
-            </span>
+            <span className={`font-medium text-right w-2/3 truncate ${highlight ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{value || '---'}</span>
         </div>
     )
 }
 
 function InputRow({ label, field, data, setData, editing }: any) {
     return (
-        <div className="flex justify-between items-center border-b border-slate-50 dark:border-slate-700/50 pb-2 last:border-0 last:pb-0 h-10">
+        <div className="flex justify-between items-center border-b border-slate-50 dark:border-slate-700/50 pb-2 last:border-0 last:pb-0 h-8">
             <span className="text-sm text-slate-500 w-1/3">{label}</span>
             {editing ? (
-                <input 
-                    type="text" 
-                    className="w-2/3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-right focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    value={data[field] || ''}
-                    onChange={e => setData({...data, [field]: e.target.value})}
-                    placeholder="---"
-                />
-            ) : (
-                <span className="font-medium text-slate-700 dark:text-slate-200 text-right w-2/3 truncate">
-                    {data[field] || '---'}
-                </span>
-            )}
+                <input type="text" className="w-2/3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 text-right text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                    value={data[field] || ''} onChange={e => setData({...data, [field]: e.target.value})} placeholder="---" />
+            ) : <span className="font-medium text-slate-700 dark:text-slate-200 text-right w-2/3 truncate text-sm">{data[field] || '---'}</span>}
         </div>
     )
 }

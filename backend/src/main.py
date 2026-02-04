@@ -2,15 +2,18 @@ import sys
 import os
 import shutil
 
+from requests import auth
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile 
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Response 
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pydantic import BaseModel
 from typing import List
 
 from src import models, database, schemas
@@ -343,4 +346,103 @@ def upload_foto_avaria(evento_id: int, file: UploadFile = File(...), db: Session
     db.refresh(evento)
 
     return {"status": "Sucesso", "url": url_relativa, "lista_atual": evento.fotos_avaria}
+
+
+# Rotas das Garras 
+
+def get_garras_config():
+    ips = os.getenv("GARRAS_IPS", "").split(",")
+    user = os.getenv("GARRAS_USER", "admin")
+    password = os.getenv("GARRAS_PASS", "")
+
+    garras = []
+    for idx, ip in enumerate(ips):
+        if ip.strip():
+            garras.append({
+                "id": idx,
+                "nome": f"Garra {idx + 1}",
+                "ip": ip.strip(),
+                "user": user,
+                "password": password
+            })
+    return garras
+
+@app.get("/config/garras")
+def listar_garras():
+    configs = get_garras_config()
+    return [{"id": g["id"], "nome": g["nome"]} for g in configs]
+
+@app.get("/proxy/snapshot/garra/{garra_id}")
+def proxy_snapshot_garra_id(garra_id: int):
+    import requests
+    from requests.auth import HTTPDigestAuth
+
+    garras = get_camera_config()
+    if garra_id < 0 or garra_id >= len(garras):
+        return Response(status_code=404)
+
+    cam = garras[garra_id]
+
+    url = f"http://{cam['ip']}/cgi-bin/snapshot.cgi"
+
+    try:
+        resp = requests.get(url, auth=HTTPDigestAuth(cam['user'], cam['password']), timeout=2)
+        if resp.status_code == 200:
+            return Response(content=resp.content, media_type="image/jpg")
+    except Exception as e:
+        print(f"Erro proxy garra {garra_id}: {e}")
+    return Response(status_code=500)
+
+class GarraCaptureRequest(BaseModel):
+    garra_id: int
+
+@app.post("/eventos/{evento_id}/captura-remota")
+def captura_snapshot_garra(evento_id: int, dados: GarraCaptureRequest, db: Session = Depends(get_db)):
+    garras = get_camera_config()
+    if dados.garra_id < 0 or dados.garra_id >= len(garras):
+        raise HTTPException(status_code=404, detail="Garra não encontrada")
+
+    cam = garras[dados.garra_id]
+
+    evento = db.query(models.EventoVMS).filter(models.EventoVMS.id == evento_id).first()
+    if not evento:
+        raise HTTPException(status_code=404, detail="Ticket não encontrado")
+
+    timestamp_file = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nome_arquivo = f"Garra_{dados.garra_id + 1}_{evento_id}_{timestamp_file}.jpg"
+
+    caminho = salvar_snapshot_camera(cam['ip'], cam['user'], cam['password'], "GARRA", nome_fixo=nome_arquivo)
+
+    if not caminho:
+        raise HTTPException(status_code=500, detail="Falha ao conectar na câmera para captura")
+
+    url_relativa = f"/imagens/snapshots/{nome_arquivo}"
+
+    if evento.fotos_avaria:
+        evento.fotos_avaria += f",{url_relativa}"
+    else:
+        evento.fotos_avaria = url_relativa
+
+    db.commit()
+    return {"status": "Capturado", "url": url_relativa}
+
+class FotoDeleteRequest(BaseModel):
+    foto_url: str
+
+@app.delete("/eventos/{evento_id}/remover-foto")
+def remover_foto_avaria(evento_id: int, dados: FotoDeleteRequest, db: Session = Depends(get_db)):
+    evento = db.query(models.EventoVMS).filter(models.EventoVMS.id == evento_id).first()
+    if not evento or not evento.fotos_avaria:
+        raise HTTPException(status_code=404, detail="Evento ou fotos não encontrados.")
+
+    lista_urls = evento.fotos_avaria.split(',')
+    url_limpa = dados.foto_url.strip()
+
+    if url_limpa in lista_urls:
+        lista_urls.remove(url_limpa)
+
+    evento.fotos_avaria = ",".join(lista_urls) if lista_urls else None
+    db.commit()
+
+    return {"status": "Foto removida"}
 
