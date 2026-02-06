@@ -195,7 +195,7 @@ export function TicketDetails() {
                 <InfoRow label="Fornecedor" value={ticket.fornecedor_nome} />
                 <InfoRow label="Produto" value={ticket.produto_declarado} />
                 <InfoRow label="Nota Fiscal" value={ticket.nota_fiscal} />
-                <InfoRow label="Entrada (API)" value={ticket.data_entrada_sinobras} />
+                <InfoRow label="Entrada " value={ticket.data_entrada_sinobras} />
             </div>
           </div>
         </div>
@@ -208,14 +208,14 @@ export function TicketDetails() {
             </h3>
             <div className="space-y-4">
                 <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded border border-slate-100 dark:border-slate-700">
-                    <span className="text-xs text-slate-500 block uppercase font-bold mb-1">Peso Bruto (Sinobras)</span>
+                    <span className="text-xs text-slate-500 block uppercase font-bold mb-1">Peso Bruto (agi)</span>
                     <span className="text-3xl font-mono font-bold dark:text-white text-slate-800">
                         {pesoBruto.toLocaleString()} <span className="text-sm font-sans text-slate-400">kg</span>
                     </span>
                 </div>
                 
                 <div className="flex justify-between items-center px-2 py-2 border-b border-slate-100 dark:border-slate-700">
-                    <span className="text-sm text-slate-500">Tara (Digitada)</span>
+                    <span className="text-sm text-slate-500">Tara (carreta)</span>
                     <span className="font-mono text-slate-700 dark:text-slate-300 font-bold">{pesoTara.toLocaleString()} kg</span>
                 </div>
                 
@@ -270,13 +270,13 @@ export function TicketDetails() {
         </h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Observações</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Observações do classificador</label>
                 {isEditing ? (
                     <textarea className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 h-48 focus:ring-2 outline-none text-slate-700 dark:text-slate-200 resize-none"
                         value={formData.observacao || ''} onChange={e => setFormData({...formData, observacao: e.target.value})} placeholder="Registre observações..."/>
                 ) : (
                     <div className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg p-3 h-48 overflow-y-auto text-slate-600 italic">
-                        {ticket?.observacao || 'Sem observações.'}
+                        {ticket?.observacao || 'Descreva impurezas, objetos estranhos, etc...'}
                     </div>
                 )}
             </div>
@@ -302,7 +302,7 @@ export function TicketDetails() {
                     <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center border border-slate-800 shadow-lg">
                         {previewUrl ? <img src={previewUrl} className="w-full h-full object-contain" alt="Live" /> : <div className="text-white animate-pulse text-xs">Conectando...</div>}
                         <button onClick={handleCapturaGarra} disabled={capturando} className="absolute bottom-4 bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-full font-bold shadow-xl flex items-center gap-2">
-                            {capturando ? '...' : <><Aperture size={15} /> CAPTURAR</>}
+                            {capturando ? '...' : <><Camera size={15} /> CAPTURAR</>}
                         </button>
                     </div>
                 )}
