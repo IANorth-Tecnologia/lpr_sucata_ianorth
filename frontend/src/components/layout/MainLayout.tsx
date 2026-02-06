@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { 
-    Sun, Moon, Truck, LayoutDashboard, Menu, X, ChevronLeft, 
+    Sun, Moon, LayoutDashboard, Menu, X, ChevronLeft, 
     BarChart3, Settings, LogOut, History 
 } from 'lucide-react';
 
@@ -25,22 +25,18 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-light-border dark:border-dark-border">
             <span className="font-bold text-xl tracking-tight text-slate-800 dark:text-white whitespace-nowrap">IANorth</span>
-            <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-500 hover:text-red-500"><X size={20}/></button>
+            <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-500 hover:text-red-500 transition-colors">
+                <X size={20}/>
+            </button>
         </div>
 
         <nav className="flex-1 px-3 space-y-1 mt-6 overflow-y-auto">
+            
             <NavItem 
                 icon={<LayoutDashboard size={20}/>} 
                 label="Dashboard" 
                 active={location.pathname === '/'}
                 onClick={() => navigate('/')}   
-            />
-            
-            <NavItem 
-                icon={<Truck size={20}/>} 
-                label="Tickets (Entrada)" 
-                active={location.pathname.includes('/tickets')}
-                onClick={() => navigate('/')} 
             />
 
             <NavItem 
@@ -122,7 +118,7 @@ interface NavItemProps {
     icon: React.ReactNode;
     label: string;
     active?: boolean;
-    onClick?: () => void; 
+    onClick: () => void; 
 }
 
 function NavItem({ icon, label, active = false, onClick }: NavItemProps) {
