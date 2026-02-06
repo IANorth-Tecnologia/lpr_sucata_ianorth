@@ -119,6 +119,15 @@ def processar_evento_camera(placa: str, origem: str):
             dados_erp['nota_fiscal'] = dados_api.get('notaFiscal', '')
             dados_erp['tipo_veiculo'] = dados_api.get('tipoVeiculo', 'Caminhao')
             dados_erp['peso_balanca'] = float(dados_api.get('pesagemInicial', 0.0))
+
+            dados_erp['uf_veiculo'] = dados_api.get('uf', '')
+            
+            raw_date = dados_api.get('dataHoraEntrada', '')
+            try:
+                dt_obj = datetime.fromisoformat(raw_date)
+                dados_erp['data_entrada_sinobras'] = dt_obj.strftime("%d/%m/%Y %H:%M")
+            except:
+                dados_erp['data_entrada_sinobras'] = raw_date 
         else:
             print("Placa não encontrada. Salvando registro vazio.")
             origem_dado = "NAO_ENCONTRADO"
@@ -140,6 +149,8 @@ def processar_evento_camera(placa: str, origem: str):
             tipo_veiculo=dados_erp['tipo_veiculo'],
             peso_nf=dados_erp['peso_nf'],
             peso_balanca=dados_erp['peso_balanca'],
+            uf_veiculo=dados_erp.get('uf_veiculo'),
+            data_entrada_sinobras=dados_erp.get('data_entrada_sinobras'),
             origem_dado=origem_dado,
             snapshot_url=final_snapshot_url,
             video_url=final_video_url
@@ -256,6 +267,36 @@ def atualizar_evento(evento_id: int, dados: schemas.EventoUpdate, db: Session = 
     if dados.peso_nf is not None: evento.peso_nf = dados.peso_nf
     if dados.peso_balanca is not None: evento.peso_balanca = dados.peso_balanca
     if dados.observacao is not None: evento.observacao = dados.observacao
+
+
+    if dados.peso_tara is not None: evento.peso_tara = dados.peso_tara
+    if dados.dim_comprimento is not None: evento.dim_comprimento = dados.dim_comprimento
+    if dados.dim_largura is not None: evento.dim_largura = dados.dim_largura
+    if dados.dim_altura is not None: evento.dim_altura = dados.dim_altura
+    if dados.impureza_porcentagem is not None: evento.impureza_porcentagem = dados.impureza_porcentagem
+    if dados.tipo_sucata is not None: evento.tipo_sucata = dados.tipo_sucata
+
+        # Calculos automatico
+    p_bruto = evento.peso_balanca or 0.0
+    p_tara = evento.peso_tara or 0.0 
+    evento.peso_liquido = max(0.0, p_bruto - p_tara )
+
+    comp = evento.dim_comprimento or 0.0
+    larg = evento.dim_largura or 0.0
+    alt = evento.dim_altura or 0.0
+    evento.cubagem_m3 = round(comp * larg * alt, 2)
+
+    if evento.cubagem_m3 > 0:
+        peso_ton = evento.peso_liquido / 1000.0
+        evento.densidade = round(peso_ton / evento.cubagem_m3, 3)
+    else: 
+        evento.densidade = 0.0
+
+    imp_pct =  evento.impureza_porcentagem or 0.0 
+    evento.desconto_kg = round(evento.peso_liquido * (imp_pct / 100), 2)
+
+
+
 
     try:
         db.commit()

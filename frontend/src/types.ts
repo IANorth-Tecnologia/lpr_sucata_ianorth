@@ -11,7 +11,10 @@ export interface EventoLPR {
     produto_declarado?: string;  
     nota_fiscal?: string;
     tipo_veiculo?: string;
-    
+    uf_veiculo?: string;    
+    data_entrada_sinobras?: string; 
+    codigo_fluxo?: string;
+
     peso_nf?: number;
     peso_balanca?: number;
     
@@ -20,4 +23,18 @@ export interface EventoLPR {
 
     observacao?: string;
     fotos_avaria?: string;
+
+    peso_tara?: number;
+    peso_liquido?: number;
+    
+    dim_comprimento?: number;
+    dim_largura?: number;
+    dim_altura?: number;
+    
+    cubagem_m3?: number;
+    densidade?: number; 
+    
+    tipo_sucata?: string;
+    impureza_porcentagem?: number;
+    desconto_kg?: number;   
 }

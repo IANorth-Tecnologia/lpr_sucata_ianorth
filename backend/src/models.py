@@ -19,12 +19,17 @@ class EventoVMS(Base):
 
     fornecedor_nome = Column(String(200), nullable=True)
     produto_declarado = Column(String(200), nullable=True)
+    tipo_sucata = Column(String(255), nullable=True) 
+    uf_veiculo = Column(String(10), nullable=True)
+    data_entrada_sinobras = Column(String(50), nullable=True)
     nota_fiscal = Column(String(100), nullable=True)
     tipo_veiculo = Column(String(100), nullable=True)
     peso_nf = Column(Float, nullable=True)
     peso_balanca = Column(Float, nullable=True)
     
     origem_dado = Column(String(50))
+    codigo_fluxo = Column(String(20), nullable=True) # F3, F13
+
     snapshot_url = Column(String(500), nullable=True)
     video_url = Column(String(500), nullable=True)
 
