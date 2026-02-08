@@ -37,21 +37,21 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
     const [materiais, setMateriais] = useState<MaterialItem[]>([]);
 
     useEffect(() => {
-        if (ticket?.tipo_sucata && materiais.length === 0) {
-            if (ticket.tipo_sucata.includes('=')) {
-                const itens = ticket.tipo_sucata.split(';').map(s => {
-                    const [tipo, val] = s.split('=');
-                    return { tipo: tipo?.trim(), pct: Number(val) || 0 };
-                });
-                setMateriais(itens);
-            } else {
-                setMateriais([{ tipo: ticket.tipo_sucata, pct: 100 }]);
+            if (ticket?.tipo_sucata && materiais.length === 0) {
+                if (ticket.tipo_sucata.includes('=')) {
+                    const itens = ticket.tipo_sucata.split(';').map(s => {
+                        const [tipo, val] = s.split('=');
+                        return { tipo: tipo?.trim(), pct: Number(val) || 0 };
+                    });
+                    setMateriais(itens);
+                } else {
+                    setMateriais([{ tipo: ticket.tipo_sucata, pct: 100 }]);
+                }
+            } else if (materiais.length === 0 && !ticket?.tipo_sucata) {
+                setMateriais([]); 
             }
-        } else if (materiais.length === 0) {
-            setMateriais([]); 
-        }
-    }, [ticket]);
-
+        }, [ticket]);
+   
     useEffect(() =>{
         if (materiais.length > 0){
             const stringSalva = materiais.map(m => `${m.tipo}=${m.pct}`).join(';');
