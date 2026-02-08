@@ -334,7 +334,7 @@ export function TicketDetails() {
       </div>
 
       {/* CALCULADORA */}
-      <ClassificationCalculator formData={formData} setFormData={setFormData} isEditing={isEditing} ticket={ticket} />
+      <ClassificationCalculator formData={formData} setFormData={setFormData} ticket={ticket} />
     </div>
   );
 }
