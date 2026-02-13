@@ -7,64 +7,48 @@ import { MediaModal } from '../components/dashboard/MediaModal';
 
 
 export function History() {
-    const [eventos, setEventos] = useState<EventoLPR[]>([]);
-    const [loading, setLoading] = useState(true);
+  const [eventos, setEventos] = useState<EventoLPR[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [busca, setBusca] = useState('');
+  const [filtroData, setFiltroData] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
-    const [busca, setBusca] = useState('');
-    const [filtroData, setFiltroData] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
 
-    const [mediaUrl, setMediaUrl] = useState<string | null>(null);
-    const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const fetchHistorico = async (termo = '') => {
+    setLoading(true);
+    try {
+        let url = `${API_BASE_URL}/eventos/?limit=100`;
+        if (termo) url += `&termo=${encodeURIComponent(termo)}`;
+        
+        const res = await fetch(url);
+        const data = await res.json();
+        setEventos(Array.isArray(data) ? data : []);
+    } catch (err) {
+        console.error("Erro ao carregar histórico:", err);
+    } finally {
+        setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchHistorico();
+  }, []);
 
-    //busca otimizada
-    const fetchHistorico = async (termo = '') => {
-        setLoading(true);
-        try {
-            let url = `${API_BASE_URL}/eventos/?limit=100`;
-            if (termo) {
-                url += `&termo=${encodeURIComponent(termo)}`;
-            }
-            const res = await fetch(url);
-            const data = await res.json();
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchHistorico(busca);
+    }, 600);
+    return () => clearTimeout(delayDebounceFn);
+  }, [busca]);
 
-            setEventos(Array.isArray(data) ? data : []);
-        } catch (err) {
-            console.error("Erro ao carregar histórico:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchHistorico();
-    }, []);
-
-    useEffect(() => {
-        const delayDebounceFn = setTimeout(() => {
-            fetchHistorico(busca);
-        }, 600);
-
-        return () => clearTimeout(delayDebounceFn);
-    }, [busca]);
-
-
-    const eventosExibidos = eventos.filter(evt => {
-        const matchTexto = 
-            evt.placa_veiculo.toLowerCase().includes(busca.toLowerCase()) ||
-                evt.fornecedor_nome?.toLowerCase().includes(busca.toLowerCase()) ||
-                evt.ticket_id?.toString().includes(busca);
-
-        const matchData = filtroData ? evt.timestamp_registro.includes(filtroData) : true;
-
-        const matchStatus = statusFilter ? (evt.status_ticket === statusFilter) : true;
-
-        return matchTexto && matchData;
-    });
-
-    const handleOpenImage = (url: string) => { setMediaUrl(url); setMediaType('image'); }
-    const handleOpenVideo = (url: string) => { setMediaUrl(url); setMediaType('video'); }
+  const eventosExibidos = eventos.filter(evt => {
+    const matchData = filtroData ? evt.timestamp_registro.includes(filtroData) : true;
+    const matchStatus = statusFilter ? (evt.status_ticket === statusFilter) : true;
+    return matchData && matchStatus;
+  });
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -133,8 +117,6 @@ export function History() {
                 ) : (
                         <EventsTable 
                             eventos={eventosExibidos} 
-                            onViewImage={handleOpenImage} 
-                            onViewVideo={handleOpenVideo} 
                         />
                     )}
             </div>

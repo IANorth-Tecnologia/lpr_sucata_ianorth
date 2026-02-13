@@ -1,22 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Calculator, Scale, Box, Percent, CheckCircle, AlertTriangle, Save, Info, Trash2, Plus } from 'lucide-react';
+import { Calculator, Scale, Box, Percent, CheckCircle, AlertTriangle, Save, Info, Trash2, Plus, FileWarning } from 'lucide-react';
 import { TruckVisualizer } from './TruckVisualizer';
 import type { EventoLPR } from '../types';
 import { API_BASE_URL } from '../config';
 
 const DENSITY_RANGES: Record<string, [number, number]> = {
-  "SUCATA MISTA": [0.2, 0.6],
-  "SUCATA MIÚDA": [0.5, 1.5],
-  "SUCATA PESADA": [0.5, 1.6],
-  "SUCATA GRAÚDA DE CORTE": [0.6, 1.7],
-  "SUCATA TRILHO FERROVIÁRIO": [0.6, 1.7],
-  "SUCATA SHREDDER INDUSTRIALIZADA": [0.65, 1.15],
-  "SUCATA TESOURADA INDUSTRIALIZADA": [0.45, 1.1],
-  "SUCATA PESADA INDUSTRIALIZADA": [0.5, 1.6],
-  "SUCATA DE GUSA INDUSTRIALIZADA": [2.0, 4.0],
-  "GUSA SÓLIDO INDUSTRIALIZADO": [2.7, 3.9],
-  "SUCATA PACOTE ENCHARUTADO": [0.4, 1.5],
-  "SUCATA PACOTE MISTO": [0.4, 1.5]
+    "SUCATA MISTA": [0.2, 0.6],
+    "SUCATA MIÚDA": [0.5, 1.5],
+    "SUCATA PESADA": [0.5, 1.6],
+    "SUCATA GRAÚDA DE CORTE": [0.6, 1.7],
+    "SUCATA TRILHO FERROVIÁRIO": [0.6, 1.7],
+    "SUCATA SHREDDER INDUSTRIALIZADA": [0.65, 1.15],
+    "SUCATA TESOURADA INDUSTRIALIZADA": [0.45, 1.1],
+    "SUCATA PESADA INDUSTRIALIZADA": [0.5, 1.6],
+    "SUCATA DE GUSA INDUSTRIALIZADA": [2.0, 4.0],
+    "GUSA SÓLIDO INDUSTRIALIZADO": [2.7, 3.9],
+    "SUCATA PACOTE ENCHARUTADO": [0.4, 1.5],
+    "SUCATA PACOTE MISTO": [0.4, 1.5]
 };
 
 const MAX_VOLUME_REF = 110; 
@@ -30,6 +30,7 @@ interface Props {
 interface MaterialItem {
     tipo: string;
     pct: number;
+    impureza: number;
 }
 
 export function ClassificationCalculator({ formData, setFormData, ticket }: Props) {
@@ -37,30 +38,31 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
     const [materiais, setMateriais] = useState<MaterialItem[]>([]);
 
     useEffect(() => {
-            if (ticket?.tipo_sucata && materiais.length === 0) {
-                if (ticket.tipo_sucata.includes('=')) {
-                    const itens = ticket.tipo_sucata.split(';').map(s => {
-                        const [tipo, val] = s.split('=');
-                        return { tipo: tipo?.trim(), pct: Number(val) || 0 };
-                    });
-                    setMateriais(itens);
-                } else {
-                    setMateriais([{ tipo: ticket.tipo_sucata, pct: 100 }]);
-                }
-            } else if (materiais.length === 0 && !ticket?.tipo_sucata) {
-                setMateriais([]); 
+        if (ticket?.tipo_sucata && materiais.length === 0) {
+            if (ticket.tipo_sucata.includes('=')) {
+                const itens = ticket.tipo_sucata.split(';').map(s => {
+                    const [tipo, val] = s.split('=');
+                    const [pct, imp] = (val || '0').includes('|') ? val.split('|') : [val, '0'];
+                    return { tipo: tipo?.trim(), pct: Number(pct) || 0, impureza: Number(imp) || 0 };
+                });
+                setMateriais(itens);
+            } else {
+                setMateriais([{ tipo: ticket.tipo_sucata, pct: 100, impureza: 0 }]);
             }
-        }, [ticket]);
-   
+        } else if (materiais.length === 0 && !ticket?.tipo_sucata) {
+            setMateriais([]); 
+        }
+    }, [ticket]);
+
     useEffect(() =>{
         if (materiais.length > 0){
-            const stringSalva = materiais.map(m => `${m.tipo}=${m.pct}`).join(';');
+            const stringSalva = materiais.map(m => `${m.tipo}=${m.pct}|${m.impureza}`).join(';');
             setFormData(prev => ({...prev, tipo_sucata: stringSalva}));
         }
     }, [materiais, setFormData]);
 
     const addMaterial = () => {
-        setMateriais([...materiais, {tipo: "", pct: 0 }]);
+        setMateriais([...materiais, {tipo: "", pct: 0, impureza: 0 }]);
     };
 
     const removeMaterial = (idx: number) => {
@@ -69,9 +71,9 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
         setMateriais(nova);
     };
 
-    const updateMaterial = (idx: number, field: keyof MaterialItem, value: any) =>{
+    const updateMaterial = (idx: number, field: keyof MaterialItem, val: any) =>{
         const nova = [...materiais];
-        nova[idx] = {...nova[idx], [field]: value };
+        nova[idx] = {...nova[idx], [field]: val };
         setMateriais(nova);
     };
 
@@ -79,55 +81,78 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
     const pesoBruto = ticket?.peso_balanca || 0;
     const pesoTara = Number(formData.peso_tara) || 0;
     const pesoLiquido = Math.max(0, pesoBruto - pesoTara);
-    const pesoTon = pesoLiquido / 1000;
+    const vol = (Number(formData.dim_comprimento) || 0) * (Number(formData.dim_largura) || 0) * (Number(formData.dim_altura) || 0);
 
-    const comp = Number(formData.dim_comprimento) || 0;
-    const larg = Number(formData.dim_largura) || 0;
-    const alt = Number(formData.dim_altura) || 0;
-    const volumeM3 = comp * larg * alt;
-
-    const densidade = volumeM3 > 0 ? (pesoTon / volumeM3) : 0;
-    const impurezaPct = Number(formData.impureza_porcentagem) || 0;
-    const descontoKg = pesoLiquido * (impurezaPct / 100);
-    const pesoFinal = pesoLiquido - descontoKg;
 
     let minIdeal = 0;
     let maxIdeal = 0;
     let totalPct = 0;
+    let impurezaPonderada = 0;
+
 
     materiais.forEach(m => {
+        const peso = m.pct / 100;
+        totalPct += m.pct;
+        impurezaPonderada += (m.impureza * peso);
+
         const range = DENSITY_RANGES[m.tipo];
         if (range){
-            const peso = m.pct / 100;
             minIdeal += range[0] * peso;
             maxIdeal += range[1] * peso;
-            totalPct += m.pct;
         }
     });
-    
-    let statusDensidade = "Aguardando dados";
-    let statusColor = "text-slate-400";
-    let statusBg = "bg-slate-100 dark:bg-slate-700";
-    
-    if (totalPct > 0 && volumeM3 > 0 && materiais.length > 0) {
-        // Normaliza para 100% caso o usuário digite menos
-        const fator = totalPct === 100 ? 1 : (100 / totalPct);
-        const minFinal = minIdeal * fator;
-        const maxFinal = maxIdeal * fator;
 
-        if (densidade < minFinal) { 
-            statusDensidade = "ABAIXO DA FAIXA"; 
-            statusColor = "text-red-600"; 
-            statusBg = "bg-red-50 border-red-200"; }
-        else if (densidade > maxFinal) { 
-            statusDensidade = "ACIMA DA FAIXA"; 
-            statusColor = "text-orange-600";
-            statusBg = "bg-orange-50 border-orange-200"; }
-        else { 
-            statusDensidade = "NA FAIXA"; 
-            statusColor = "text-green-700";
-            statusBg = "bg-green-50 border-green-200"; }
+    const fator = totalPct > 0 ? (100 / totalPct) : 1;
+    const mediaImpureza = impurezaPonderada * fator;
+
+    const minFinal = minIdeal * fator;
+    const maxFinal = maxIdeal * fator;
+
+    const densidade = vol > 0 ? (( pesoLiquido / 1000) / vol) : 0;
+
+    const descontoKg = pesoLiquido * (mediaImpureza / 100);
+    const pesoFinal = pesoLiquido - descontoKg;
+
+    let statusTexto = "Aguardando dados";
+    let statusColor = "text-slate-400";
+    let statusBg = "bg-slate-100 dark:bg-slate-700 border-slate-200";
+    let icone = <Scale size={14} />;
+
+
+    if (totalPct > 0 && vol > 0) {
+        if (mediaImpureza > 3.0) {
+            statusTexto = `ALERTA R.I.M. (${mediaImpureza.toFixed(1)}%)`;
+            statusColor = "text-red-700 dark:text-red-100";
+            statusBg = "bg-red-100 dark:bg-red-900 border-red-500 animate-pulse";
+            icone = <FileWarning size={14}/>;
+        } else if (densidade < minFinal) {
+            statusTexto = "DENSIDADE BAIXA";
+            statusColor = "text-orange-700 dark:text-orange-200";
+            statusBg = "bg-orange-100 dark:bg-orange-900/50 border-orange-300";
+            icone = <AlertTriangle size={14}/>;
+        } else if (densidade > maxFinal) {
+            statusTexto = "DENSIDADE ALTA";
+            statusColor = "text-orange-700 dark:text-orange-200";
+            statusBg = "bg-orange-100 dark:bg-orange-900/50 border-orange-300";
+            icone = <AlertTriangle size={14}/>;
+        } else {
+            statusTexto = "APROVADO / NA FAIXA";
+            statusColor = "text-green-700 dark:text-green-200";
+            statusBg = "bg-green-100 dark:bg-green-900/50 border-green-300";
+            icone = <CheckCircle size={14}/>;
+        }
     }
+
+
+    const comp = Number(formData.dim_comprimento) || 0;
+    const larg = Number(formData.dim_largura) || 0;
+    const alt = Number(formData.dim_altura) || 0;
+
+    const impurezaPct = Number(formData.impureza_porcentagem) || 0;
+
+
+
+
 
     const handleSaveCalculation = async () => {
         if (!ticket) return;
@@ -164,22 +189,22 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                     disabled={saving}
                     className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-md transition-all disabled:opacity-50"
                 >
-                    <Save size={18}/> {saving ? 'Salvando...' : 'SALVAR CÁLCULO'}
+                    <Save size={16}/> {saving ? 'Salvando...' : 'SALVAR CÁLCULO'}
                 </button>
             </div>
 
             <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-8">
-                
+
                 {/* SELEÇÃO DE MATERIAIS */}
                 <div className="md:col-span-4 space-y-3 border-r border-slate-100 dark:border-slate-700 pr-4">
                     <div className="flex justify-between items-center">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">Composição da Carga</h4>
-                        <button onClick={addMaterial} className="text-xs flex items-center gap-1 text-blue-600 font-bold hover:underline">
+                        <button onClick={addMaterial} className="text-xs items-center text-blue-600 font-bold flex gap-1 hover:underline">
                             <Plus size={12}/> Adicionar Tipo
                         </button>
                     </div>
 
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
                         {materiais.map((item, idx) => (
                             <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-2 rounded border border-slate-200 dark:border-slate-700">
                                 <select 
@@ -190,23 +215,33 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                                     <option value="">Selecione...</option>
                                     {Object.keys(DENSITY_RANGES).map(k => <option key={k} value={k}>{k}</option>)}
                                 </select>
-                                <div className="flex items-center gap-1 w-16">
+
+                                <div className="flex flex-col w-12 items-center">
+                                    <label className="text-[8px] text-slate-400 font-bold"> VOL %</label>
                                     <input type="number" className="w-full bg-white dark:bg-slate-800 border rounded px-1 text-center text-xs font-bold"
                                         placeholder="%" value={item.pct || ''}
                                         onChange={(e) => updateMaterial(idx, 'pct', Number(e.target.value))}
                                     />
-                                    <span className="text-[10px] text-slate-400">%</span>
+                                </div>
+
+                                <div className="flex flex-col w-12 items-center">
+                                    <label className="text-[8px] text-red-400 font-bold">IMP %</label>
+                                    <input type="number" className="w-full bg-slate-50 dark:text-red-900/20 border border-red-200 rounded text-center text-xs text-red-600 font-bold" 
+                                        value={item.impureza} onChange={e => updateMaterial(idx, 'impureza', Number(e.target.value))} />
                                 </div>
                                 <button onClick={() => removeMaterial(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
                             </div>
                         ))}
                     </div>
-                    {totalPct !== 100 && totalPct > 0 && <div className="text-[10px] text-orange-500">Soma atual: {totalPct}%</div>}
+
+                    {totalPct !== 100 && totalPct > 0 && (
+                        <div className="text-[10px] text-orange-500 font-bold text-right">Total Volume: {totalPct}%</div>
+                    )}
                 </div>
 
                 {/* PESOS E DIMENSÕES */}
-                <div className="md:col-span-5 grid grid-cols-2 gap-6 border-r border-slate-100 dark:border-slate-700 pr-4">
-                    <div className="space-y-3">
+                <div className="md:col-span-4 space-y-4 border-r border-slate-200 dark:border-slate-700 pr-4">
+                    <div className="grid grid-cols-2 gap-4">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1"><Scale size={12}/> Pesagem</h4>
                         <div className="flex justify-between items-baseline">
                             <span className="text-xs text-slate-500">Bruto</span>
@@ -217,65 +252,56 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                             <input type="number" className="w-20 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded px-2 py-1 text-right font-mono font-bold text-slate-700 dark:text-white outline-none"
                                 value={formData.peso_tara || ''} onChange={e=>setFormData({...formData, peso_tara: Number(e.target.value)})}/>
                         </div>
-                        <div className="pt-2 border-t flex justify-between items-center">
-                            <span className="text-xs font-bold text-green-600">LÍQUIDO</span>
-                            <span className="font-mono font-bold text-lg text-green-700 dark:text-green-400">{pesoLiquido.toLocaleString()} kg</span>
-                        </div>
-                    </div>
+
+                 </div>
 
                     <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1"><Box size={12}/> Cubagem (m)</h4>
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1"><Box size={12}/> Cubagem (m³)</h4>
+                        <span> Vol: <b className="text-blue-600">{vol.toFixed(2)} m³</b></span>
                         <div className="grid grid-cols-3 gap-1">
-                            {['comprimento', 'largura', 'altura'].map((f) => (
+                            {['comprimento', 'largura', 'altura'].map( f => (
                                 <div key={f}>
-                                    <input type="number" placeholder={f.substr(0,1).toUpperCase()} 
+                                    <input type="number" placeholder={f[0].toUpperCase()} 
                                         className="w-full bg-slate-50 dark:bg-slate-900 border rounded px-1 py-1 text-center font-mono text-xs outline-none"
                                         value={formData[`dim_${f}` as keyof EventoLPR] || ''} 
                                         onChange={e=>setFormData({...formData, [`dim_${f}`]: Number(e.target.value)})}/>
                                 </div>
                             ))}
                         </div>
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-center border border-blue-100 dark:border-blue-800">
-                            <span className="text-[10px] font-bold text-blue-600 block uppercase">Volume Total</span>
-                            <span className="text-xl font-mono font-bold text-blue-700 dark:text-blue-400">{volumeM3.toFixed(2)} m³</span>
-                        </div>
                     </div>
                 </div>
 
                 {/* RESULTADOS E IMPUREZA */}
-                <div className="md:col-span-3 space-y-4 flex flex-col justify-between">
+                <div className="md:col-span-3 flex flex-col justify-between h-full">
                     <div className="text-center">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Densidade Real</span>
-                        <span className="text-3xl font-mono font-bold text-slate-800 dark:text-white">{densidade.toFixed(3)}</span>
-                        <div className={`mt-1 text-[10px] font-bold px-2 py-1 rounded border inline-flex items-center gap-1 ${statusBg} ${statusColor}`}>
-                            {statusDensidade.includes("OK") || statusDensidade.includes("NA FAIXA") ? <CheckCircle size={10}/> : <AlertTriangle size={10}/>}
-                            {statusDensidade}
-                        </div>
-                    </div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Status da Classificação</span>
 
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-red-500 uppercase"><Percent size={10} className="inline"/> Impureza</span>
-                            <div className="flex items-center gap-1">
-                                <input type="number" className="w-12 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded px-1 py-0.5 text-right font-mono text-sm font-bold text-red-600 outline-none"
-                                    value={formData.impureza_porcentagem || ''} onChange={e=>setFormData({...formData, impureza_porcentagem: Number(e.target.value)})}/>
-                                <span className="text-xs text-red-500">%</span>
-                            </div>
+                        <div className={`mt-2 w-full py-2 px-3 rounded border flex items-center justify-center gap-2 font-bold text-xs shadow-sm transition-all duration-300 ${statusBg} ${statusColor}`}>
+                            {icone}
+                            {statusTexto}
                         </div>
-                        <div className="text-right text-[10px] text-red-400 font-mono border-t border-red-100 pt-1">
-                            Desconto: {descontoKg.toFixed(0)} kg
+
+                        <div className="mt-4 flex justify-between items-end border-b border-slate-100 dark:border-slate-700 pb-2">
+                            <span className="text-[10px] text-slate-400">Densidade</span>
+                            <span className="text-xl font-mono font-bold text-slate-700 dark:text-white">{densidade.toFixed(3)}</span>
+
                         </div>
                     </div>
 
                     <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded border border-green-200 dark:border-green-800 text-center">
-                        <span className="text-[10px] font-bold text-green-800 dark:text-green-500 uppercase block">A Pagar</span>
-                        <span className="text-xl font-mono font-bold text-green-900 dark:text-green-300">{pesoFinal.toLocaleString()} <span className="text-xs">kg</span></span>
+                        <span className="text-[10px] font-bold text-green-800 dark:text-green-500 uppercase block">Peso Liquido Final</span>
+                        <span className="text-2xl font-mono font-bold text-green-800 dark:text-green-300 tracking-tight">{pesoFinal.toLocaleString()} <span className="text-xs">kg</span></span>
+                        {descontoKg > 0 && (
+                            <div className="text-[9px] text-red-500 font-bold mt-1">
+                                - {descontoKg.toFixed(0)} kg (Impureza)
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
             <div className="px-6 pb-6 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-slate-700 pt-4">
-                <TruckVisualizer volume={volumeM3} maxVolume={MAX_VOLUME_REF} impurezaPct={impurezaPct} />
+                <TruckVisualizer volume={vol} maxVolume={MAX_VOLUME_REF} materiais={materiais} />
             </div>
         </div>
     );
