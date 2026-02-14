@@ -19,8 +19,6 @@ const DENSITY_RANGES: Record<string, [number, number]> = {
   "SUCATA PACOTE MISTO": [0.4, 1.5]
 };
 
-const MAX_VOLUME_REF = 110; 
-
 interface Props {
     formData: Partial<EventoLPR>;
     setFormData: React.Dispatch<React.SetStateAction<Partial<EventoLPR>>>;
@@ -50,7 +48,7 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                 setMateriais([{ tipo: ticket.tipo_sucata, pct: 100, impureza: 0 }]);
             }
         } else if (materiais.length === 0) {
-             setMateriais([{ tipo: "", pct: 0, impureza: 0 }]); // Inicia zerado
+             setMateriais([{ tipo: "", pct: 0, impureza: 0 }]);
         }
     }, [ticket]);
 
@@ -72,7 +70,11 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
     const pesoBruto = ticket?.peso_balanca || 0;
     const pesoTara = Number(formData.peso_tara) || 0;
     const pesoLiquido = Math.max(0, pesoBruto - pesoTara);
-    const vol = (Number(formData.dim_comprimento)||0) * (Number(formData.dim_largura)||0) * (Number(formData.dim_altura)||0);
+    
+    const comp = Number(formData.dim_comprimento) || 0;
+    const larg = Number(formData.dim_largura) || 0;
+    const alt = Number(formData.dim_altura) || 0;
+    const vol = comp * larg * alt;
     
     let totalPctVolume = 0;
     let impurezaPonderada = 0;
@@ -110,17 +112,17 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
             statusBg = "bg-red-100 dark:bg-red-900 border-red-500 animate-pulse";
             icone = <FileWarning size={14}/>;
         } else if (densidade < minFinal) {
-            statusTexto = "DENSIDADE BAIXA";
+            statusTexto = "ABAIXO DA BAIXA";
             statusCor = "text-orange-700 dark:text-orange-200";
             statusBg = "bg-orange-100 dark:bg-orange-900/50 border-orange-300";
             icone = <AlertTriangle size={14}/>;
         } else if (densidade > maxFinal) {
-            statusTexto = "DENSIDADE ALTA";
+            statusTexto = "ACIMA DA FAIXA";
             statusCor = "text-orange-700 dark:text-orange-200";
             statusBg = "bg-orange-100 dark:bg-orange-900/50 border-orange-300";
             icone = <AlertTriangle size={14}/>;
         } else {
-            statusTexto = "APROVADO / NA FAIXA";
+            statusTexto = "NA FAIXA";
             statusCor = "text-green-700 dark:text-green-200";
             statusBg = "bg-green-100 dark:bg-green-900/50 border-green-300";
             icone = <CheckCircle size={14}/>;
@@ -135,9 +137,9 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     peso_tara: pesoTara,
-                    dim_comprimento: Number(formData.dim_comprimento),
-                    dim_largura: Number(formData.dim_largura),
-                    dim_altura: Number(formData.dim_altura),
+                    dim_comprimento: comp,
+                    dim_largura: larg,
+                    dim_altura: alt,
                     impureza_porcentagem: mediaImpurezaFinal,
                     tipo_sucata: formData.tipo_sucata,
                 })
@@ -180,7 +182,7 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                                     </select>
                                 </div>
                                 
-                                {/* VOL % (Sem o Zero) */}
+                                {/* VOL % */}
                                 <div className="col-span-3">
                                     <label className="block text-[8px] text-slate-400 font-bold mb-0.5 text-center">VOL %</label>
                                     <input type="number" className="w-full bg-white dark:bg-slate-700 border dark:border-slate-600 rounded px-1 py-1 text-center text-xs dark:text-white font-bold"
@@ -188,7 +190,7 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                                         onChange={e => updateMaterial(idx, 'pct', Number(e.target.value))} />
                                 </div>
 
-                                {/* IMP % (Sem o Zero) */}
+                                {/* IMP % */}
                                 <div className="col-span-3">
                                     <label className="block text-[8px] text-red-400 font-bold mb-0.5 text-center">IMP %</label>
                                     <input type="number" className="w-full bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-1 py-1 text-center text-xs text-red-600 dark:text-red-300 font-bold"
@@ -230,13 +232,20 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                             <span>Vol: <b className="text-blue-600">{vol.toFixed(2)} m³</b></span>
                         </span>
                         <div className="grid grid-cols-3 gap-2">
-                            {['comprimento', 'largura', 'altura'].map(f => (
-                                <input key={f} type="number" placeholder={f[0].toUpperCase()}
-                                    className="bg-white dark:bg-slate-900 border dark:border-slate-700 rounded px-1 py-1 text-center text-xs font-mono dark:text-white"
-                                    value={formData[`dim_${f}` as keyof EventoLPR] > 0 ? formData[`dim_${f}` as keyof EventoLPR] : ''} 
-                                    onChange={e=>setFormData({...formData, [`dim_${f}`]: Number(e.target.value)})}
-                                />
-                            ))}
+                            {['comprimento', 'largura', 'altura'].map(f => {
+                                const fieldName = `dim_${f}` as keyof EventoLPR;
+                                const valorAtual = Number(formData[fieldName] || 0); 
+                                return (
+                                    <input 
+                                        key={f} 
+                                        type="number" 
+                                        placeholder={f[0].toUpperCase()}
+                                        className="bg-white dark:bg-slate-900 border dark:border-slate-700 rounded px-1 py-1 text-center text-xs font-mono dark:text-white"
+                                        value={valorAtual > 0 ? valorAtual : ''} 
+                                        onChange={e => setFormData({...formData, [fieldName]: Number(e.target.value)})}
+                                    />
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
