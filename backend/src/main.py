@@ -535,3 +535,43 @@ def remover_foto_avaria(evento_id: int, dados: FotoDeleteRequest, db: Session = 
 
     return {"status": "Foto removida"}
 
+# ROTAS DE VÍDEO 
+
+@app.get("/proxy/video/garra/{garra_id}")
+def proxy_video_stream(garra_id: int):
+    """
+    Proxy de Vídeo MJPEG: Conecta na câmera e repassa o fluxo
+    direto para o navegador sem salvar no disco.
+    """
+    garras = get_garras_config() 
+    
+    if garra_id < 0 or garra_id >= len(garras):
+        return Response(status_code=404, content="Câmera não encontrada")
+
+    cam = garras[garra_id]
+    
+    stream_url = f"http://{cam['ip']}/cgi-bin/mjpg/video.cgi?channel=1&subtype=1"
+
+    try:
+        req = requests.get(
+            stream_url, 
+            auth=HTTPDigestAuth(cam['user'], cam['password']), 
+            stream=True, 
+            timeout=10
+        )
+        
+        if req.status_code != 200:
+            print(f"Erro ao conectar na câmera {garra_id}: Status {req.status_code}")
+            return Response(status_code=502, content="Erro na câmera")
+
+        content_type = req.headers.get("content-type", "multipart/x-mixed-replace; boundary=frame")
+
+        return StreamingResponse(
+            req.iter_content(chunk_size=1024), 
+            media_type=content_type,
+            status_code=req.status_code
+        )
+
+    except Exception as e:
+        print(f"Erro no proxy de vídeo da garra {garra_id}: {e}")
+        return Response(status_code=503, content="Serviço indisponível")

@@ -14,7 +14,7 @@ def gravar_video_evento(ip, user, password, nome_arquivo, duracao=15):
     
     caminho_completo = os.path.join(pasta_destino, nome_arquivo)
     
-    rtsp_url = f"rtsp://{user}:{password}@{ip}:554/cam/realmonitor?channel=1&subtype=0"
+    rtsp_url = f"rtsp://{user}:{password}@{ip}:554/cam/realmonitor?channel=1&subtype=1"
     
     comando = [
         "ffmpeg",
