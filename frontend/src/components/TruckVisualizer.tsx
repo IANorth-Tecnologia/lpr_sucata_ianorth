@@ -127,7 +127,10 @@ export function TruckVisualizer({ materiais }: TruckProps) {
       >
         <div
           className="absolute z-0 overflow-hidden opacity-90"
-          style={{ ...bedStyle, borderRadius: "0 0 5px 5px" }}
+          style={{ ...bedStyle, 
+		   borderRadius: "0 0 5px 5px",
+		   clipPath:"polygon(0% 0%, 100% 20%, 100% 0%, 100% 100%, 0% 100%)"
+		 }}
         >
           <div className="absolute inset-0 flex flex-col-reverse">
             {normalized.map((m, idx) => (
