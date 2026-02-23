@@ -78,16 +78,17 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
     const vol = comp * larg * alt;
     
     let totalPesoInformado = 0;
-    materiais.forEach(m => totalPesoInformado += m.peso);
+    let totalImpurezaKgInformada = 0;
+    materiais.forEach(m => {
+    totalPesoInformado += m.peso;
+    totalImpurezaKgInformada += m.impureza;
+    });
 
-    let impurezaPonderada = 0;
     let minIdeal = 0; 
     let maxIdeal = 0;
 
     materiais.forEach(m => {
         const pesoRelativo = totalPesoInformado > 0 ? (m.peso / totalPesoInformado) : 0;
-        
-        impurezaPonderada += (m.impureza * pesoRelativo);
         const range = DENSITY_RANGES[m.tipo];
         if (range) {
             minIdeal += range[0] * pesoRelativo;
@@ -95,7 +96,8 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
         }
     });
 
-    const mediaImpurezaFinal = impurezaPonderada;
+    const mediaImpurezaFinal = totalPesoInformado > 0 ? (totalImpurezaKgInformada / totalPesoInformado) * 100 : 0;
+
     const minFinal = minIdeal;
     const maxFinal = maxIdeal;
     const densidade = vol > 0 ? ((pesoLiquido / 1000) / vol) : 0;
@@ -168,15 +170,16 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                 <div className="lg:col-span-7 space-y-3 border-r border-slate-200 dark:border-slate-700 pr-4">
                     <div className="flex justify-between items-center">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase">Composição da Carga</h4>
-                        <button onClick={addMaterial} className="text-xs text-blue-600 font-bold flex gap-1 hover:underline"><Plus size={12}/> Adicionar</button>
+                        <button onClick={addMaterial} className="text-xs text-blue-600 font-bold flex gap-1 hover:underline"><Plus size={12}/> Adicionar Sucata</button>
                     </div>
                     
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
                         {materiais.map((m, idx) => {
                             const proporcao = totalPesoInformado > 0 ? (m.peso / totalPesoInformado) : 0;
                             const pctVisual = proporcao * 100;
+                            const impPct = m.peso > 0 ? (m.impureza / m.peso) * 100 : 0;
                             const pesoBrutoRealDoItem = pesoLiquido * proporcao;
-                            const itemDesconto = pesoBrutoRealDoItem * (m.impureza / 100);
+                            const itemDesconto = pesoBrutoRealDoItem * (impPct / 100);
                             const itemLiquido = pesoBrutoRealDoItem - itemDesconto;
 
                             return (
@@ -192,7 +195,7 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
                                         </select>
                                     </div>
                                     
-                                    {/* INPUT  */}
+                                    {/* INPUT PESO  */}
                                     <div className="col-span-2">
                                         <label className="block text-[8px] text-slate-400 font-bold mb-0.5 text-center">PESO (kg)</label>
                                         <input type="number" className="w-full bg-white dark:bg-slate-700 border dark:border-slate-600 rounded px-1 py-1 text-center text-[10px] dark:text-white font-bold"
@@ -202,15 +205,20 @@ export function ClassificationCalculator({ formData, setFormData, ticket }: Prop
 
                                     {/* PORCENTAGEM */}
                                     <div className="col-span-1 flex flex-col items-center justify-center pt-3">
-                                        <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">{pctVisual.toFixed(0)}%</span>
+                                        <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400" title="% da Carga">{pctVisual.toFixed(0)}%</span>
                                     </div>
 
                                     {/* IMPUREZA */}
                                     <div className="col-span-2">
-                                        <label className="block text-[8px] text-red-400 font-bold mb-0.5 text-center">IMP %</label>
+                                        <label className="block text-[8px] text-red-400 font-bold mb-0.5 text-center">IMP (kg)</label>
                                         <input type="number" className="w-full bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-1 py-1 text-center text-[10px] text-red-600 dark:text-red-300 font-bold"
                                             value={m.impureza > 0 ? m.impureza : ''} 
                                             onChange={e => updateMaterial(idx, 'impureza', Number(e.target.value))} />
+                                    </div>
+
+                                    {/* IMPUREZA %*/}
+                                    <div className="col-span-1 flex flex-col items-center justify-center pt-3">
+                                        <span className="text-[9px] font-bold text-red-500 dark:text-red-400" title="% Impureza deste material">{impPct.toFixed(1)}%</span>
                                     </div>
 
                                     {/* RESULTADO LIQUIDO DO ITEM */}
