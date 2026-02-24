@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Calendar, Search, Filter, Download, ArrowDown, Database } from 'lucide-react';
 import { EventsTable } from '../components/dashboard/EventsTable';
 import { MediaModal } from '../components/dashboard/MediaModal';
@@ -6,12 +7,14 @@ import type { EventoLPR } from '../types';
 import { API_BASE_URL } from '../config'; 
 
 export function History() {
+  const [searchParams] = useSearchParams();
   const [eventos, setEventos] = useState<EventoLPR[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [busca, setBusca] = useState('');
   const [filtroData, setFiltroData] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
 
   const [mediaModal, setMediaModal] = useState<{url: string, type: 'image' | 'video'} | null>(null);
 
@@ -52,7 +55,7 @@ export function History() {
   const handleViewVideo = (url: string) => setMediaModal({ url, type: 'video' });
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6 max-w-[1600px] mx-auto animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
