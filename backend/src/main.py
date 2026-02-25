@@ -152,7 +152,7 @@ def processar_evento_camera(placa: str, origem: str):
             nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
 
             salvar_snapshot_camera(
-                config.ip_address, 
+                origem,
                 config.username, 
                 config.password, 
                 placa, 
@@ -161,7 +161,11 @@ def processar_evento_camera(placa: str, origem: str):
             final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
             
             gravar_video_evento(
-                config.ip_address, config.username, config.password, nome_arquivo_video, duracao=15
+                origem,
+                config.username,
+                config.password,
+                nome_arquivo_video, 
+                duracao=15
             )
             final_video_url = f"/imagens/videos/{nome_arquivo_video}"
             
@@ -170,7 +174,7 @@ def processar_evento_camera(placa: str, origem: str):
 
     try:
         dt_obj = datetime.fromisoformat(raw_date)
-        data_formatada = dt_obj.strftime("%d/%m/Y %H:%M")
+        data_formatada = dt_obj.strftime("%d/%m/%Y %H:%M")
     except: 
         data_formatada = raw_date
 
