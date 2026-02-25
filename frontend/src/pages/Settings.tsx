@@ -72,20 +72,20 @@ export function Settings() {
                 
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        IP da Câmera (e Porta)
+                        IP das Câmeras (e Porta)
                     </label>
                     <div className="relative">
                         <Camera className="absolute left-3 top-3 text-slate-400" size={18} />
                         <input 
                             type="text" 
-                            placeholder="Ex: 192.168.1.16 ou 170.233.150.111:8898"
+                            placeholder="Ex: 192.168.1.16, 10.6.51.204"
                             className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
                             value={ip}
                             onChange={e => setIp(e.target.value)}
                             required
                         />
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">Insira o IP local se estiver no servidor, ou IP externo se estiver remoto.</p>
+                    <p className="text-xs text-slate-500 mt-1">DICA: Para monitorar mais de uma balança, separe os IPs com vírgula.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
