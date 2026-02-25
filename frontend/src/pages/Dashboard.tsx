@@ -55,7 +55,7 @@ export function Dashboard() {
       }
   });
 
-    const eventosEmAberto = eventos.filter(e => e.status_ticket !== 'Finalizado');
+    const eventosEmAberto = eventos.filter(e => e.status_ticket !== 'Finalizado' && e.timestamp_registro.includes(todayDate));
 
   return (
     <div className="space-y-6 animate-fade-in">

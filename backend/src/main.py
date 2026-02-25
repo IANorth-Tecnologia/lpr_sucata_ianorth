@@ -316,7 +316,7 @@ def atualizar_evento(evento_id: int, dados: schemas.EventoUpdate, db: Session = 
     else: 
         evento.densidade = 0.0
 
-    imp_pct =  float(evento.impureza_porcentagem or 0.0)
+    imp_pct =  safe_float(evento.impureza_porcentagem or 0.0)
     evento.desconto_kg = round(evento.peso_liquido * (imp_pct / 100), 2)
 
     try:
@@ -337,6 +337,8 @@ def listar_eventos(
     db: Session = Depends(get_db)
 ):
     query = db.query(models.EventoVMS)
+
+    query = query.filter(models.EventoVMS.produto_declarado.ilike("%sucata%"))
 
     if termo:
         termo_limpo = termo.strip()
