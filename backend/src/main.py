@@ -37,9 +37,7 @@ os.makedirs(os.path.join(STATIC_DIR, "snapshots"), exist_ok=True)
 
 models.Base.metadata.create_all(bind=database.engine)
 
-monitor = None
-
-
+listeners_ativos = []
 
 def get_db():
     db = database.SessionLocal()
@@ -49,18 +47,27 @@ def get_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Iniciando Listener LPR Intelbras...")
-    global monitor
-    try:
-        monitor = IntelbrasLPRListener()
-        monitor.start()
-        print("Listener LPR Ativo e monitoramento...")
-    except Exception as e:
-        print(f"Erro ao iniciar Listener LPR: {e}")
+    global listeners_ativos
+
+    db = database.SessionLocal()
+    config = db.query(models.CameraConfig).first()
+    db.close()
+    if config and config.is_active and config.ip_address:
+        ips = [ip.strip() for ip in config.ip_address.split(",") if ip.strip()]
+        for ip in ips:
+            try:
+                l = IntelbrasLPRListener(ip=ip, user=config.username, password=config.password, callback=processar_evento_camera)
+                l.start()
+                listeners_ativos.append(l)
+                print("Listener LPR Ativo e monitoramento...")
+            except Exception as e:
+                print(f"Erro ao iniciar Listener LPR {ip}: {e}")
     
     yield
     print("Parando Serviços...")
-    if monitor: 
-        monitor.stop()
+    for l in listeners_ativos:
+        l.stop()
+    listeners_ativos.clear()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -98,10 +105,9 @@ def get_garras_config():
     return garras
 
 def processar_evento_camera(placa: str, origem: str):
-    print(f"Nova placa detectada: {placa}")
+    print(f"Nova placa detectada: {placa} via {origem}")
 
     global ultimas_placas_lidas
-    
     agora = datetime.now()
 
     if placa in ultimas_placas_lidas:
@@ -109,9 +115,27 @@ def processar_evento_camera(placa: str, origem: str):
         if tempo_passado < 300:
             print(f"Ignorando placa repetida {placa} (Lida há {tempo_passado:.0f}s)")
 
-        ultimas_placas_lidas[placa] = agora
 
-        print(f"Nova placa detectada e aprovada para processamento: {placa}")
+    dados_api = sinobras.consultar_truck_arrival(placa)
+
+    if not dados_api:
+        print(f"Ignorado: Placa {placa} não possui ticket ativo.")
+        return
+
+    produto = str(dados_api.get('tipoProduto', '')).lower()
+    if 'sucata' not in produto:
+        print(f"Ignorado: Placa {placa} | Produto não é sucata: {produto}")
+        return
+
+    raw_date = str(dados_api.get('dataHoraEntrada', ''))
+    hoje_iso = datetime.now().strftime("%Y-%m-%d")
+    hoje_br = datetime.now().strftime("%d/%m/%Y")
+
+    if hoje_iso not in raw_date and hoje_br not in raw_date:
+        print(f"⏳ Ignorado: Placa {placa} | Ticket antigo ({raw_date}). Aguardando atualização na 2ª balança.")
+        return
+
+    ultimas_placas_lidas[placa] = agora
 
     timestamp_str = agora.strftime("%Y-%m-%d %H:%M:%S")
     timestamp_file = agora.strftime("%Y%m%d_%H%M%S")
@@ -121,10 +145,8 @@ def processar_evento_camera(placa: str, origem: str):
     
     final_snapshot_url = None
     final_video_url = None
-    origem_dado = "Desconhecido"
 
     if config and config.is_active:
-        origem_dado = "CAMERA_REAL"
         try:
             nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
             nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
@@ -145,107 +167,71 @@ def processar_evento_camera(placa: str, origem: str):
             
         except Exception as e:
             print(f"Erro ao capturar mídia real: {e}")
-    
-    elif MODO_DESENVOLVIMENTO:
-        final_snapshot_url = "/imagens/mock.jpg"
-        final_video_url = "/imagens/mock.jpg"
 
-    dados_erp = {
-        'ticket_id': 0, 
-        'status_ticket': '', 
-        'fornecedor': '',           
-        'produto': '',
-        'nota_fiscal': '',
-        'tipo_veiculo': '', 
-        'peso_nf': 0, 
-        'peso_balanca': 0           
-    }
-    
     try:
-        dados_api = sinobras.consultar_truck_arrival(placa) 
-
-        if dados_api:
-            print("Dados encontrados na Sinobras!")
-            origem_dado = "SINOBRAS_API"
-            dados_erp['ticket_id'] = dados_api.get('ticket', '0')
-            dados_erp['status_ticket'] = dados_api.get('status', 'Classificado')
-            dados_erp['fornecedor'] = dados_api.get('fornecedor', '')
-            dados_erp['produto'] = dados_api.get('tipoProduto', '')
-            dados_erp['nota_fiscal'] = dados_api.get('notaFiscal', '')
-            dados_erp['tipo_veiculo'] = dados_api.get('tipoVeiculo', 'Caminhao')
-            dados_erp['peso_balanca'] = float(dados_api.get('pesagemInicial', 0.0))
-
-            dados_erp['uf_veiculo'] = dados_api.get('uf', '')
-            
-            raw_date = dados_api.get('dataHoraEntrada', '')
-            try:
-                dt_obj = datetime.fromisoformat(raw_date)
-                dados_erp['data_entrada_sinobras'] = dt_obj.strftime("%d/%m/%Y %H:%M")
-            except:
-                dados_erp['data_entrada_sinobras'] = raw_date 
-        else:
-            print("Placa não encontrada. Salvando registro vazio.")
-            origem_dado = "NAO_ENCONTRADO"
-           
-    except Exception as e:
-        print(f"Erro na integração de dados: {e}")
-        origem_dado = "ERRO_INTEGRACAO"
+        dt_obj = datetime.fromisoformat(raw_date)
+        data_formatada = dt_obj.strftime("%d/%m/Y %H:%M")
+    except: 
+        data_formatada = raw_date
 
     try:
         evento = models.EventoVMS(
             timestamp_registro=timestamp_str,
             placa_veiculo=placa,
             camera_nome=origem,
-            ticket_id=dados_erp['ticket_id'],
-            status_ticket=dados_erp['status_ticket'],
-            fornecedor_nome=dados_erp['fornecedor'],
-            produto_declarado=dados_erp['produto'],
-            nota_fiscal=dados_erp['nota_fiscal'],
-            tipo_veiculo=dados_erp['tipo_veiculo'],
-            peso_nf=dados_erp['peso_nf'],
-            peso_balanca=dados_erp['peso_balanca'],
-            uf_veiculo=dados_erp.get('uf_veiculo'),
-            data_entrada_sinobras=dados_erp.get('data_entrada_sinobras'),
-            origem_dado=origem_dado,
+            ticket_id=dados_api.get('ticket', '0'),
+            status_ticket='Aberto', # <-- REGRA 3: FORÇA O STATUS "Aberto"
+            fornecedor_nome=dados_api.get('fornecedor', ''),
+            produto_declarado=dados_api.get('tipoProduto', ''),
+            nota_fiscal=dados_api.get('notaFiscal', ''),
+            tipo_veiculo=dados_api.get('tipoVeiculo', 'Caminhao'),
+            peso_nf=dados_api.get('peso_nf', 0),
+            peso_balanca=float(dados_api.get('pesagemInicial', 0.0)),
+            uf_veiculo=dados_api.get('uf', ''),
+            data_entrada_sinobras=data_formatada,
+            origem_dado="SINOBRAS_API",
             snapshot_url=final_snapshot_url,
             video_url=final_video_url
         )
         db.add(evento)
         db.commit()
-        print(f"Evento salvo: Ticket #{evento.ticket_id}")
+        print(f" Evento salvo: Ticket #{evento.ticket_id} (Fila de Triagem)")
         
     except Exception as e:
-        print(f"Erro ao salvar no banco: {e}")
+        print(f" Erro ao salvar no banco: {e}")
         db.rollback()
     finally:
         db.close()
+    
 
 def reload_camera_service():
-    global monitor
+    global listeners_ativos
     
-    if monitor:
-        print("Parando serviço de câmera atual...")
-        monitor.stop()
-        monitor = None
+    print("Parando serviço de câmera atuais...")
+    for l in listeners_ativos:
+        l.stop()
+    listeners_ativos.clear()
 
     db = database.SessionLocal()
     config = db.query(models.CameraConfig).first()
     db.close()
 
-    if config and config.is_active:
-        print(f"Iniciando conexão REAL com {config.ip_address}...")
-        monitor = IntelbrasLPRListener(
-            ip=config.ip_address,
-            user=config.username,
-            password=config.password,
-            callback=processar_evento_camera
-        )
-        monitor.start()
-    
+    if config and config.is_active and config.ip_address:
+        ips = [ip.strip() for ip in config.ip_address.split(",") if ip.strip()]
+        print(f"Iniciando conexão REAL com {ips}...")
+        for ip in ips:
+            try:
+                l = IntelbrasLPRListener(ip=ip, user=config.username, password=config.password, callback=processar_evento_camera)
+                l.start()
+                listeners_ativos.append(l)
+            except Exception as e:
+                print(f"Erro ao iniciar camera {ip}: {e}")
+
     elif MODO_DESENVOLVIMENTO:
         print("Nenhuma config ativa. Iniciando MOCK...")
-        monitor = MockIntelbrasListener("0.0.0.0", "admin", "123", processar_evento_camera)
-        monitor.start()
+        l = MockIntelbrasListener("0.0.0.0", "admin", "123", processar_evento_camera)
+        l.start()
+        listeners_ativos.append(l)
     else:
         print(" Aguardando configuração de câmera...")
 
@@ -307,13 +293,13 @@ def atualizar_evento(evento_id: int, dados: schemas.EventoUpdate, db: Session = 
     if dados.tipo_sucata is not None: evento.tipo_sucata = dados.tipo_sucata
 
         # Calculos automatico
-    p_bruto = evento.peso_balanca or 0.0
-    p_tara = evento.peso_tara or 0.0 
+    p_bruto = float(evento.peso_balanca or 0.0)
+    p_tara = float(evento.peso_tara or 0.0) 
     evento.peso_liquido = max(0.0, p_bruto - p_tara )
 
-    comp = evento.dim_comprimento or 0.0
-    larg = evento.dim_largura or 0.0
-    alt = evento.dim_altura or 0.0
+    comp = float(evento.dim_comprimento or 0.0)
+    larg = float(evento.dim_largura or 0.0)
+    alt = float(evento.dim_altura or 0.0)
     evento.cubagem_m3 = round(comp * larg * alt, 2)
 
     if evento.cubagem_m3 > 0:
@@ -322,7 +308,7 @@ def atualizar_evento(evento_id: int, dados: schemas.EventoUpdate, db: Session = 
     else: 
         evento.densidade = 0.0
 
-    imp_pct =  evento.impureza_porcentagem or 0.0 
+    imp_pct =  float(evento.impureza_porcentagem or 0.0)
     evento.desconto_kg = round(evento.peso_liquido * (imp_pct / 100), 2)
 
     try:
