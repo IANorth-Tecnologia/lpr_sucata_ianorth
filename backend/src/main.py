@@ -151,8 +151,10 @@ def processar_evento_camera(placa: str, origem: str):
             nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
             nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
 
+            ip_real_camera = origem.replace("Cam-", "")
+
             salvar_snapshot_camera(
-                origem,
+                ip_real_camera,
                 config.username, 
                 config.password, 
                 placa, 
@@ -161,7 +163,7 @@ def processar_evento_camera(placa: str, origem: str):
             final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
             
             gravar_video_evento(
-                origem,
+                ip_real_camera,
                 config.username,
                 config.password,
                 nome_arquivo_video, 
