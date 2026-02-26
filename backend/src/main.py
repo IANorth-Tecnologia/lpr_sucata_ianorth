@@ -2,6 +2,8 @@ import sys
 import os
 import shutil
 import requests
+import time
+import threading
 from requests.auth import HTTPDigestAuth
 
 from fastapi.responses import StreamingResponse, Response
@@ -105,37 +107,59 @@ def get_garras_config():
     return garras
 
 def processar_evento_camera(placa: str, origem: str):
-    print(f"Nova placa detectada: {placa} via {origem}")
+    t = threading.Thread(target=_processamento_com_tentativas, args=(placa, origem))
+    t.daemon = True
+    t.start()
+
+def _processamento_com_tentativas(placa: str, origem: str):
+    print(f"Nova placa detectada: {placa} via {origem}. Iniciando auditoria...")
 
     global ultimas_placas_lidas
     agora = datetime.now()
 
     if placa in ultimas_placas_lidas:
         tempo_passado = (agora - ultimas_placas_lidas[placa]).total_seconds()
-        if tempo_passado < 300:
+        if tempo_passado < 120:
             print(f"Ignorando placa repetida {placa} (Lida há {tempo_passado:.0f}s)")
 
 
-    dados_api = sinobras.consultar_truck_arrival(placa)
-
-    if not dados_api:
-        print(f"Ignorado: Placa {placa} não possui ticket ativo.")
-        return
-
-    produto = str(dados_api.get('tipoProduto', '')).lower()
-    if 'sucata' not in produto:
-        print(f"Ignorado: Placa {placa} | Produto não é sucata: {produto}")
-        return
-
-    raw_date = str(dados_api.get('dataHoraEntrada', ''))
-    hoje_iso = datetime.now().strftime("%Y-%m-%d")
-    hoje_br = datetime.now().strftime("%d/%m/%Y")
-
-    if hoje_iso not in raw_date and hoje_br not in raw_date:
-        print(f"⏳ Ignorado: Placa {placa} | Ticket antigo ({raw_date}). Aguardando atualização na 2ª balança.")
-        return
-
     ultimas_placas_lidas[placa] = agora
+
+    max_tentativas = 6
+    intervalo_segundos = 15
+    dados_api = None
+    ticket_valido = False
+
+    for tentativa in range(1, max_tentativas + 1):
+        dados_api = sinobras.consultar_truck_arrival(placa)
+
+        if not dados_api:
+            print(f"[Tentativas {tentativa}/{max_tentativas}] Placa {placa} não possui ticket ativo. Aguardando {intervalo_segundos}s...")
+            time.sleep(intervalo_segundos)
+            continue
+
+        produto = str(dados_api.get('tipoProduto', '')).lower()
+        if 'sucata' not in produto:
+            print(f"Ignorado: Placa {placa} | Produto não é sucata: {produto}")
+            return
+
+        raw_date = str(dados_api.get('dataHoraEntrada', ''))
+        hoje_iso = datetime.now().strftime("%Y-%m-%d")
+        hoje_br = datetime.now().strftime("%d/%m/%Y")
+
+        if hoje_iso in raw_date or hoje_br in raw_date:
+            ticket_valido = True
+            break
+        else:
+            print(f"⏳ [Tentativa {tentativa}/{max_tentativas}]Placa {placa} | Ticket ainda antigo ({raw_date}). Aguardando atualização na 2ª balança.")
+            time.sleep(intervalo_segundos)
+    if not dados_api or not ticket_valido:
+        print(f"Falha: A placa {placa} não foi atualizada após {max_tentativas * intervalo_segundos} segundos.")
+        if placa in ultimas_placas_lidas:
+            del ultimas_placas_lidas[placa]
+        return
+
+    ultimas_placas_lidas[placa] = datetime.now()
 
     timestamp_str = agora.strftime("%Y-%m-%d %H:%M:%S")
     timestamp_file = agora.strftime("%Y%m%d_%H%M%S")
