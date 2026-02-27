@@ -601,21 +601,23 @@ def obter_detalhes_veiculos(placa: str, db: Session = Depends(get_db)):
         ),
         models.EventoVMS.peso_tara > 0 
     ).order_by(desc(models.EventoVMS.id)).first()
-
+    
     if ultimo_evento:
         def arrumar_medida(valor, limite_logico):
             v = float(valor or 0.0)
-            # Se a medida passar do limite físico de um caminhão,
-            if v > limite_logico:
-                return round(v / 100.0, 2)
+            if v == 0: return 0.0
+            
+            while v > limite_logico:
+                v = v / 10.0
+                
             return round(v, 2)
 
-        # Limites absurdos para forçar a correção (Comprimento > 40m, Larg/Alt > 10m)
-        comp_real = arrumar_medida(ultimo_evento.dim_comprimento, 40)
-        larg_real = arrumar_medida(ultimo_evento.dim_largura, 10)
-        alt_real = arrumar_medida(ultimo_evento.dim_altura, 10)
+        # Limites físicos de um caminhão nas rodovias:
+        comp_real = arrumar_medida(ultimo_evento.dim_comprimento, 35)
+        larg_real = arrumar_medida(ultimo_evento.dim_largura, 5)
+        alt_real = arrumar_medida(ultimo_evento.dim_altura, 5)
 
-        print(f"Memória ativada! Tara: {ultimo_evento.peso_tara}kg | Dim: {comp_real}m x {larg_real}m x {alt_real}m")
+        print(f"✅ Memória ativada! Tara: {ultimo_evento.peso_tara}kg | Dim: {comp_real}m x {larg_real}m x {alt_real}m")
         
         return {
             "peso_tara": ultimo_evento.peso_tara,
@@ -624,5 +626,5 @@ def obter_detalhes_veiculos(placa: str, db: Session = Depends(get_db)):
             "dim_altura": alt_real
         }
         
-    print("Nenhum histórico com tara foi encontrado para esta placa.")
+    print("❌ Nenhum histórico com tara foi encontrado para esta placa.")
     return {}
