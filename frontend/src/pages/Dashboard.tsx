@@ -12,24 +12,29 @@ export function Dashboard() {
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const navigate = useNavigate();
 
-  const fetchDados = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/eventos/`);
-      if (res.ok) {
-        const data = await res.json();
-        setEventos(data);
-      }
-    } catch (e) { 
-        console.error(e); 
-    }
-  };
-
   useEffect(() => {
-    fetchDados();
-    const interval = setInterval(fetchDados, 2000);
-    return () => clearInterval(interval);
+    let isMounted = true;
+    
+    const fetchLoop = async () => {
+        if (!isMounted) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/eventos/`);
+            if (res.ok) {
+                const data = await res.json();
+                setEventos(data);
+            }
+        } catch (e) { 
+            console.error("Aguardando servidor..."); 
+        } finally {
+            if (isMounted) setTimeout(fetchLoop, 2500); 
+        }
+    };
+
+    fetchLoop();
+    return () => { isMounted = false; };
   }, []);
 
+ 
   const handleOpenImage = (url: string) => { setMediaUrl(url); setMediaType('image'); }
   const handleOpenVideo = (url: string) => { setMediaUrl(url); setMediaType('video'); }
 

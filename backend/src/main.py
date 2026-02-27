@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
                 print("Listener LPR Ativo e monitoramento...")
             except Exception as e:
                 print(f"Erro ao iniciar Listener LPR {ip}: {e}")
-    
+
     yield
     print("Parando Serviços...")
     for l in listeners_ativos:
@@ -165,54 +165,40 @@ def _processamento_com_tentativas(placa: str, origem: str):
 
     timestamp_str = agora.strftime("%Y-%m-%d %H:%M:%S")
     timestamp_file = agora.strftime("%Y%m%d_%H%M%S")
-    
+
     db = database.SessionLocal()
-    config = db.query(models.CameraConfig).first()
-    
-    final_snapshot_url = None
-    final_video_url = None
+    try:
+        config = db.query(models.CameraConfig).first()
+        
+        final_snapshot_url = None
+        final_video_url = None
 
-    if config and config.is_active:
+        if config and config.is_active:
+            try:
+                nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
+                nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
+                ip_real_camera = origem.replace("Cam-", "")
+
+                salvar_snapshot_camera(ip_real_camera, config.username, config.password, placa, nome_fixo=nome_arquivo_foto)
+                final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
+                
+                gravar_video_evento(ip_real_camera, config.username, config.password, nome_arquivo_video, duracao=15)
+                final_video_url = f"/imagens/videos/{nome_arquivo_video}"
+            except Exception as e:
+                print(f"Erro de mídia: {e}")
+
         try:
-            nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
-            nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
+            dt_obj = datetime.fromisoformat(raw_date)
+            data_formatada = dt_obj.strftime("%d/%m/%Y %H:%M")
+        except: 
+            data_formatada = raw_date
 
-            ip_real_camera = origem.replace("Cam-", "")
-
-            salvar_snapshot_camera(
-                ip_real_camera,
-                config.username, 
-                config.password, 
-                placa, 
-                nome_fixo=nome_arquivo_foto  
-            )
-            final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
-            
-            gravar_video_evento(
-                ip_real_camera,
-                config.username,
-                config.password,
-                nome_arquivo_video, 
-                duracao=15
-            )
-            final_video_url = f"/imagens/videos/{nome_arquivo_video}"
-            
-        except Exception as e:
-            print(f"Erro ao capturar mídia real: {e}")
-
-    try:
-        dt_obj = datetime.fromisoformat(raw_date)
-        data_formatada = dt_obj.strftime("%d/%m/%Y %H:%M")
-    except: 
-        data_formatada = raw_date
-
-    try:
         evento = models.EventoVMS(
             timestamp_registro=timestamp_str,
             placa_veiculo=placa,
             camera_nome=origem,
             ticket_id=dados_api.get('ticket', '0'),
-            status_ticket='Aberto', # FORÇA O STATUS "Aberto"
+            status_ticket='Aberto',
             fornecedor_nome=dados_api.get('fornecedor', ''),
             produto_declarado=dados_api.get('tipoProduto', ''),
             nota_fiscal=dados_api.get('notaFiscal', ''),
@@ -227,46 +213,38 @@ def _processamento_com_tentativas(placa: str, origem: str):
         )
         db.add(evento)
         db.commit()
-        print(f" Evento salvo: Ticket #{evento.ticket_id} (Fila de Triagem)")
+        print(f"Evento salvo: Ticket #{evento.ticket_id}")
         
     except Exception as e:
         print(f" Erro ao salvar no banco: {e}")
         db.rollback()
     finally:
         db.close()
-    
+
 
 def reload_camera_service():
     global listeners_ativos
-    
+
     print("Parando serviço de câmera atuais...")
     for l in listeners_ativos:
         l.stop()
     listeners_ativos.clear()
 
     db = database.SessionLocal()
-    config = db.query(models.CameraConfig).first()
-    db.close()
-
-    if config and config.is_active and config.ip_address:
-        ips = [ip.strip() for ip in config.ip_address.split(",") if ip.strip()]
-        print(f"Iniciando conexão REAL com {ips}...")
-        for ip in ips:
-            try:
-                l = IntelbrasLPRListener(ip=ip, user=config.username, password=config.password, callback=processar_evento_camera)
-                l.start()
-                listeners_ativos.append(l)
-            except Exception as e:
-                print(f"Erro ao iniciar camera {ip}: {e}")
-
-    elif MODO_DESENVOLVIMENTO:
-        print("Nenhuma config ativa. Iniciando MOCK...")
-        l = MockIntelbrasListener("0.0.0.0", "admin", "123", processar_evento_camera)
-        l.start()
-        listeners_ativos.append(l)
-    else:
-        print(" Aguardando configuração de câmera...")
-
+    try:
+        config = db.query(models.CameraConfig).first()
+        if config and config.is_active and config.ip_address:
+            ips = [ip.strip() for ip in config.ip_address.split(",") if ip.strip()]
+            print(f"Iniciando conexão REAL com {ips}...")
+            for ip in ips:
+                try:
+                    l = IntelbrasLPRListener(ip=ip, user=config.username, password=config.password, callback=processar_evento_camera)
+                    l.start()
+                    listeners_ativos.append(l)
+                except Exception as e:
+                    print(f"Erro ao iniciar camera {ip}: {e}")
+    finally:
+        db.close() 
 
 # ROTAS DA CÂMERA LPR - BANCO DE DADOS
 
@@ -282,16 +260,16 @@ def get_camera_config(db: Session = Depends(get_db)):
 @app.post("/config/camera")
 def save_camera_config(dados: schemas.CameraConfigSchema, db: Session = Depends(get_db)):
     config = db.query(models.CameraConfig).first()
-    
+
     if not config:
         config = models.CameraConfig()
         db.add(config)
-    
+
     config.ip_address = dados.ip_address
     config.username = dados.username
     config.password = dados.password
     config.is_active = dados.is_active
-    
+
     db.commit()
     reload_camera_service()
     return {"status": "Configuração salva e câmera reconectada!"}
@@ -404,19 +382,19 @@ def sincronizar_registros_antigos(db: Session = Depends(get_db)):
     print("Iniciando sincronização de legado...")
     eventos_pendentes = db.query(models.EventoVMS).filter(
         (models.EventoVMS.origem_dado != "SINOBRAS_API") | 
-        (models.EventoVMS.ticket_id == "0")
+            (models.EventoVMS.ticket_id == "0")
     ).all()
-    
+
     atualizados = 0
     erros = 0
-    
+
     for evento in eventos_pendentes:
         try:
             if isinstance(evento.timestamp_registro, str):
                 data_registro = evento.timestamp_registro.split(" ")[0]
             else:
                 data_registro = evento.timestamp_registro.strftime("%Y-%m-%d")
-            
+
             dados_api = sinobras.consultar_truck_arrival(evento.placa_veiculo, data_iso=data_registro)
             if dados_api:
                 evento.ticket_id = str(dados_api.get('ticket', '0'))
@@ -477,7 +455,7 @@ def proxy_snapshot_garra_id(garra_id: int):
     CORREÇÃO: Usa get_garras_config() para ler do .env em vez de consultar o banco.
     """
     garras = get_garras_config()  
-    
+
     if garra_id < 0 or garra_id >= len(garras):
         return Response(status_code=404)
 
@@ -507,7 +485,7 @@ def captura_snapshot_garra(evento_id: int, dados: GarraCaptureRequest, db: Sessi
     CORREÇÃO: Usa get_garras_config() para pegar credenciais.
     """
     garras = get_garras_config() 
-    
+
     if dados.garra_id < 0 or dados.garra_id >= len(garras):
         raise HTTPException(status_code=404, detail="Garra não encontrada")
 
@@ -549,7 +527,7 @@ def remover_foto_avaria(evento_id: int, dados: FotoDeleteRequest, db: Session = 
 
     if url_limpa in lista_urls:
         lista_urls.remove(url_limpa)
-        
+
         try:
             path_part = url_limpa.replace("/imagens/", "")
             full_path = os.path.join(STATIC_DIR, path_part)
@@ -572,12 +550,12 @@ def proxy_video_stream(garra_id: int):
     direto para o navegador sem salvar no disco.
     """
     garras = get_garras_config() 
-    
+
     if garra_id < 0 or garra_id >= len(garras):
         return Response(status_code=404, content="Câmera não encontrada")
 
     cam = garras[garra_id]
-    
+
     stream_url = f"http://{cam['ip']}/cgi-bin/mjpg/video.cgi?channel=1&subtype=1"
 
     try:
@@ -587,7 +565,7 @@ def proxy_video_stream(garra_id: int):
             stream=True, 
             timeout=10
         )
-        
+
         if req.status_code != 200:
             print(f"Erro ao conectar na câmera {garra_id}: Status {req.status_code}")
             return Response(status_code=502, content="Erro na câmera")
@@ -606,16 +584,32 @@ def proxy_video_stream(garra_id: int):
 
 @app.get("/veiculos/{placa}/dados-cadastrais")
 def obter_detalhes_veiculos(placa: str, db: Session = Depends(get_db)):
+    
+    placa_limpa = placa.replace("-", "").replace(" ", "").upper()
+    
+    if len(placa_limpa) >= 7:
+        placa_com_traco = f"{placa_limpa[:3]}-{placa_limpa[3:]}"
+    else:
+        placa_com_traco = placa_limpa
+
+    print(f"Buscando histórico de cubagem para: {placa_limpa} ou {placa_com_traco}")
+
     ultimo_evento = db.query(models.EventoVMS).filter(
-        models.EventoVMS.placa_veiculo == placa,
+        or_(
+            models.EventoVMS.placa_veiculo.ilike(f"%{placa_limpa}%"),
+            models.EventoVMS.placa_veiculo.ilike(f"%{placa_com_traco}%")
+        ),
         models.EventoVMS.peso_tara > 0 
-    ).order_by(desc(models.EventoVMS.timestamp_registro)).first()
+    ).order_by(desc(models.EventoVMS.id)).first() 
 
     if ultimo_evento:
-        return{
+        print(f"Memória ativada! Tara recuperada: {ultimo_evento.peso_tara} kg")
+        return {
             "peso_tara": ultimo_evento.peso_tara,
-            "dim_comprimento":ultimo_evento.dim_comprimento,
+            "dim_comprimento": ultimo_evento.dim_comprimento,
             "dim_largura": ultimo_evento.dim_largura,
             "dim_altura": ultimo_evento.dim_altura
         }
+        
+    print("Nenhum histórico com tara foi encontrado para esta placa.")
     return {}
