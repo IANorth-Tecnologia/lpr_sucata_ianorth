@@ -559,20 +559,17 @@ def proxy_video_stream(garra_id: int):
 
     cam = garras[garra_id]
 
-    user_safe = urllib.parse.quote(cam['user'])
-    pass_safe = urllib.parse.quote(cam['password'])
-    
-    rtsp_url = f"rtsp://{user_safe}:{pass_safe}@{cam['ip']}:554/cam/realmonitor?channel=1&subtype=0"
-
+    rtsp_url = f"rtsp://{cam['user']}:{cam['password']}@{cam['ip']}:554/cam/realmonitor?channel=1&subtype=0"
+   
     def video_generator():
         comando = [
             "ffmpeg",
-            "-fflags", "nobuffer", #Desliga fila de espera, tira o delay
+            #"-fflags", "nobuffer", #Desliga fila de espera, tira o delay
             #"-flags", "low_delay", # Força o processamento em tempo real.
             "-rtsp_transport", "tcp", 
             "-i", rtsp_url,
-            "-vf", "scale=-2:720",
             "-c:v", "mjpeg",
+            "-boundary", "mjpeg_stream",
             "-f", "mpjpeg",
             "-q:v", "5",
             "-r", "10",             
@@ -580,7 +577,7 @@ def proxy_video_stream(garra_id: int):
             "-"                       
         ]
         
-        processo = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        processo = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=sys.stderr)
         
         try:
             if processo.stdout is None:
@@ -596,7 +593,7 @@ def proxy_video_stream(garra_id: int):
             
     return StreamingResponse(
         video_generator(), 
-        media_type="multipart/x-mixed-replace; boundary=ffserver"
+        media_type="multipart/x-mixed-replace; boundary=mjpeg_stream"
     )
 
 @app.get("/veiculos/{placa}/dados-cadastrais")
