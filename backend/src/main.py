@@ -564,16 +564,16 @@ def proxy_video_stream(garra_id: int):
     def video_generator():
         comando = [
             "ffmpeg",
-            #"-fflags", "nobuffer", #Desliga fila de espera, tira o delay
-            #"-flags", "low_delay", # Força o processamento em tempo real.
+            "-fflags", "nobuffer", #Desliga fila de espera, tira o delay
+            "-flags", "low_delay", # Força o processamento em tempo real.
             "-rtsp_transport", "tcp", 
             "-i", rtsp_url,
+            "-vf", "scale=-2:720",
             "-c:v", "mjpeg",
-            "-boundary", "mjpeg_stream",
-            "-f", "mpjpeg",
             "-q:v", "5",
             "-r", "10",             
-            "-an",                    
+            "-an", 
+            "-f", "image2pipe",
             "-"                       
         ]
         
@@ -582,18 +582,36 @@ def proxy_video_stream(garra_id: int):
         try:
             if processo.stdout is None:
                 return
+            
+            buffer = b''
 
             while True:
-                chunk = processo.stdout.read(65536)
+                chunk = processo.stdout.read(8192)
                 if not chunk:
                     break
-                yield chunk
+                buffer += chunk
+
+                a = buffer.find(b'\xff\xd8')
+                b = buffer.find(b'\xff\xd9')
+
+                if a != -1 and b != -1:
+                    if b > a:
+                        jpg_data = buffer[a:b+2]
+                        buffer = buffer[b+2:] 
+                        
+                        yield (
+                            b'--frame_seguro\r\n'
+                            b'Content-Type: image/jpeg\r\n\r\n' + jpg_data + b'\r\n'
+                        )
+                    else:
+                        buffer = buffer[b+2:]
+
         finally:
             processo.kill() 
             
     return StreamingResponse(
         video_generator(), 
-        media_type="multipart/x-mixed-replace; boundary=mjpeg_stream"
+        media_type="multipart/x-mixed-replace; boundary=frame_seguro"
     )
 
 @app.get("/veiculos/{placa}/dados-cadastrais")
