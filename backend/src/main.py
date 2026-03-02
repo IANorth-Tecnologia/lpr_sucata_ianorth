@@ -564,11 +564,12 @@ def proxy_video_stream(garra_id: int):
         comando = [
             "ffmpeg",
             "-fflags", "nobuffer", #Desliga fila de espera, tira o delay
-            "-flags", "low_delay", # Força o processamento em tempo real.
+            #"-flags", "low_delay", # Força o processamento em tempo real.
             "-rtsp_transport", "tcp", 
             "-i", rtsp_url,
-            "-f", "mpjpeg",
             "-vf", "scale=-1:720"
+            "-c:v", "mjpeg"
+            "-f", "mpjpeg",
             "-q:v", "5",
             "-r", "10",             
             "-an",                    
