@@ -563,6 +563,8 @@ def proxy_video_stream(garra_id: int):
     def video_generator():
         comando = [
             "ffmpeg",
+            "-fflags", "nobuffer", #Desliga fila de espera, tira o delay
+            "-flags", "low_delay", # Força o processamento em tempo real.
             "-rtsp_transport", "tcp", 
             "-i", rtsp_url,
             "-f", "mpjpeg",
@@ -579,7 +581,7 @@ def proxy_video_stream(garra_id: int):
                 return
 
             while True:
-                chunk = processo.stdout.read(8192)
+                chunk = processo.stdout.read(65536)
                 if not chunk:
                     break
                 yield chunk
