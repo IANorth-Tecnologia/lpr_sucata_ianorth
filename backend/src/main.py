@@ -2,6 +2,7 @@ import sys
 import os
 import shutil
 import requests
+import urllib.parse
 import subprocess
 import time
 import threading
@@ -557,8 +558,11 @@ def proxy_video_stream(garra_id: int):
         return Response(status_code=404, content="Câmera não encontrada")
 
     cam = garras[garra_id]
+
+    user_safe = urllib.parse.quote(cam['user'])
+    pass_safe = urllib.parse.quote(cam['password'])
     
-    rtsp_url = f"rtsp://{cam['user']}:{cam['password']}@{cam['ip']}:554/cam/realmonitor?channel=1&subtype=0"
+    rtsp_url = f"rtsp://{user_safe}:{pass_safe}@{cam['ip']}:554/cam/realmonitor?channel=1&subtype=0"
 
     def video_generator():
         comando = [
@@ -592,7 +596,7 @@ def proxy_video_stream(garra_id: int):
             
     return StreamingResponse(
         video_generator(), 
-        media_type="multipart/x-mixed-replace; boundary=ffmpeg"
+        media_type="multipart/x-mixed-replace; boundary=ffserver"
     )
 
 @app.get("/veiculos/{placa}/dados-cadastrais")
