@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Responsive, WidthProvider, Layout } from 'react-grid-layout';
+// @ts-ignore
+import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
-import { TrendingUp, Scale, AlertTriangle, Filter, GripHorizontal } from 'lucide-react';
+import { TrendingUp, Scale, AlertTriangle, Filter, GripHorizontal, BarChart3 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import type { EventoLPR } from '../types';
 
@@ -16,7 +17,7 @@ export function Reports() {
     const [loading, setLoading] = useState(true);
     const [filtroDias, setFiltroDias] = useState(7);
 
-    const defaultLayout: Layout[] = [
+    const defaultLayout = [
         { i: 'kpi-peso', x: 0, y: 0, w: 4, h: 1, minW: 2, minH: 1 },
         { i: 'kpi-viagens', x: 4, y: 0, w: 4, h: 1, minW: 2, minH: 1 },
         { i: 'kpi-impureza', x: 8, y: 0, w: 4, h: 1, minW: 2, minH: 1 },
@@ -104,7 +105,7 @@ export function Reports() {
             <div className="-mx-2">
                 <ResponsiveGridLayout 
                     className="layout" 
-                    layouts={{ lg: defaultLayout }}
+                    layouts={{ lg: defaultLayout as any }}
                     breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
                     cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }}
                     rowHeight={120}
