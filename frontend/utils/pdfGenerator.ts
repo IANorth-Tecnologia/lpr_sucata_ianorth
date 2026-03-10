@@ -9,21 +9,32 @@ const CINZA_BORDA = [209, 213, 219]; // #d1d5db
 const LARANJA = [249, 115, 22];      // #f97316
 
 
-const loadImageBase64 = async (url: string): Promise<string> => {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
+const getImageDataAsJpeg = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous'; // Impede o navegador de bloquear imagens da API
         
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-    } catch (error) {
-        throw new Error(`Falha ao converter imagem: ${url}`);
-    }
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width || 800;
+            canvas.height = img.height || 600;
+            
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                resolve(canvas.toDataURL('image/jpeg', 0.95));
+            } else {
+                reject(new Error('Canvas não suportado pelo navegador'));
+            }
+        };
+        
+        img.onerror = () => reject(new Error(`Erro ao carregar a imagem na URL: ${url}`));
+        
+        img.src = url + (url.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+    });
 };
 
 export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
@@ -32,24 +43,23 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
     const height = doc.internal.pageSize.getHeight();
     let y = 15;
 
+    // 1. CABEÇALHO E LOGO SINOBRAS
     try {
-        const logoSino = await loadImageBase64('/sinobras-logo.png'); 
-        // Passa o Base64 diretamente para o addImage
-        doc.addImage(logoSino, 'PNG', 12, y - 5, 40, 15); 
-    } catch (e) {
-        console.warn("Logo Sinobras não encontrada em /sinobras-logo.png");
-    }
+        const logoSinoData = await getImageDataAsJpeg('/sinobras-logo.png'); 
+        doc.addImage(logoSinoData, 'JPEG', 14, y - 5, 40, 15); 
+    } catch (e) { console.warn("Logo Sinobras não encontrada"); }
 
     doc.setTextColor(AZUL_ESCURO[0], AZUL_ESCURO[1], AZUL_ESCURO[2]);
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("RELATÓRIO DE IMPUREZA DE MATERIAIS (R.I.M)", width / 2, y + 2, { align: 'center' });
+    doc.text("RELATÓRIO DE IMPUREZA E PESAGEM", width / 2, y + 2, { align: 'center' });
 
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.text(`TICKET Nº: ${ticket.ticket_id || '0000'}`, width - 14, y, { align: 'right' });
     doc.text(`DATA: ${ticket.timestamp_registro?.split(' ')[0] || 'N/D'}`, width - 14, y + 5, { align: 'right' });
 
+    // Caixa de Status
     y += 15;
     const status = ticket.status_ticket || 'PENDENTE';
     if (status === 'Finalizado') doc.setFillColor(34, 197, 94);
@@ -77,8 +87,8 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
         return currentY + 12;
     };
 
-
-    let startYSec1 = drawSectionHeader(" DADOS DO RECEBIMENTO / FORNECEDOR", y);
+    // SEÇÃO 1: DADOS DO RECEBIMENTO E LPR
+    let startYSec1 = drawSectionHeader("1. DADOS DO RECEBIMENTO / FORNECEDOR", y);
     y = startYSec1;
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(9);
@@ -88,8 +98,7 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
     let rightImgX = width - 14 - 55; 
     let rightImgW = 55;
     let rightImgH = 31; 
-
-
+    
     doc.setFont("helvetica", "bold"); doc.text("PLACA:", leftColX, y); 
     doc.setFont("helvetica", "normal"); doc.text(ticket.placa_veiculo || "---", leftColX + 15, y);
     
@@ -124,10 +133,12 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
     doc.setFont("helvetica", "normal"); doc.text(ticket.timestamp_registro || "---", leftColX + 30, y);
     doc.setTextColor(0, 0, 0);
 
+    // Foto LPR com proteção
     if (ticket.snapshot_url) {
         try {
-            const imgLprBase64 = await loadImageBase64(getMediaUrl(ticket.snapshot_url));
-            doc.addImage(imgLprBase64, 'JPEG', rightImgX, startYSec1 - 3, rightImgW, rightImgH);
+            const imgLprData = await getImageDataAsJpeg(getMediaUrl(ticket.snapshot_url));
+            doc.addImage(imgLprData, 'JPEG', rightImgX, startYSec1 - 3, rightImgW, rightImgH);
+            
             doc.setDrawColor(200, 200, 200);
             doc.setLineWidth(0.5);
             doc.rect(rightImgX, startYSec1 - 3, rightImgW, rightImgH);
@@ -139,6 +150,7 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
             doc.setFont("helvetica", "bold");
             doc.text("FOTO LPR - ENTRADA DO VEÍCULO", rightImgX + (rightImgW / 2), startYSec1 - 3 + rightImgH + 3, { align: 'center' });
         } catch(e) {
+            console.warn("Erro ao carregar Foto LPR:", e);
             doc.setDrawColor(200, 200, 200);
             doc.rect(rightImgX, startYSec1 - 3, rightImgW, rightImgH);
         }
@@ -146,9 +158,8 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
 
     y = Math.max(y + 8, startYSec1 + rightImgH + 10);
 
-
-    y = drawSectionHeader(" AUDITORIA DE PESAGEM E DESCONTOS", y);
-    
+    // SEÇÃO 2: AUDITORIA DE PESAGEM
+    y = drawSectionHeader("2. AUDITORIA DE PESAGEM E DESCONTOS", y);
     const pesoBruto = Number(ticket.peso_balanca) || 0;
     const pesoTara = Number(ticket.peso_tara) || 0;
     const pesoLiquido = Math.max(0, pesoBruto - pesoTara);
@@ -157,22 +168,16 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
     const pesoFinal = Math.max(0, pesoLiquido - descontoKg);
 
     autoTable(doc, {
-        startY: y,
-        margin: { left: 14, right: 14 },
-        head: [], 
+        startY: y, margin: { left: 14, right: 14 }, head: [], 
         body: [
             ['Peso Bruto (Entrada na Balança)', `${pesoBruto.toLocaleString('pt-BR')} kg`],
             ['Tara Registrada (Veículo Vazio)', `${pesoTara.toLocaleString('pt-BR')} kg`],
             ['Peso Líquido Total da Carga', `${pesoLiquido.toLocaleString('pt-BR')} kg`],
-            [`Desconto por Impureza (${impurezaPct}%)`, `- ${descontoKg.toLocaleString('pt-BR')} kg`],
+            [`Desconto por Impureza (${impurezaPct.toFixed(1)}%)`, `- ${descontoKg.toLocaleString('pt-BR')} kg`],
             ['PESO FINAL APROVADO / FATURADO', `${pesoFinal.toLocaleString('pt-BR')} kg`]
         ],
-        theme: 'plain',
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0,0,0] },
-        columnStyles: { 
-            0: { fontStyle: 'normal' },
-            1: { fontStyle: 'bold', halign: 'right' }
-        },
+        theme: 'plain', styles: { fontSize: 9, cellPadding: 2, textColor: [0,0,0] },
+        columnStyles: { 1: { fontStyle: 'bold', halign: 'right' } },
         willDrawCell: (data) => {
             if (data.row.index === 4 && data.section === 'body') {
                 doc.setFont("helvetica", "bold");
@@ -185,24 +190,22 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
 
     y = (doc as any).lastAutoTable.finalY + 12;
 
-    y = drawSectionHeader(" OBSERVAÇÕES DA CLASSIFICAÇÃO", y);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    
-    const obs = ticket.observacao || "Sem observações adicionais registradas durante a classificação da sucata.";
+    // SEÇÃO 3: OBSERVAÇÕES
+    y = drawSectionHeader("3. OBSERVAÇÕES DA CLASSIFICAÇÃO", y);
+    doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    const obs = ticket.observacao || "Sem observações adicionais registradas.";
     const splitObs = doc.splitTextToSize(obs, width - 28);
     doc.text(splitObs, 16, y);
-    y += (splitObs.length * 4) + 25;
+    y += (splitObs.length * 4) + 10;
 
-
+    // SEÇÃO 4 - GALERIA DE FOTOS EVIDÊNCIAS
     if (ticket.fotos_avaria) {
         const fotos = ticket.fotos_avaria.split(',').filter(f => f.trim() !== '');
         
         if (fotos.length > 0) {
             if (y > height - 40) { doc.addPage(); y = 20; }
             
-            y = drawSectionHeader(` REGISTRO FOTOGRÁFICO DAS EVIDÊNCIAS (${fotos.length})`, y);
+            y = drawSectionHeader(`4. REGISTRO FOTOGRÁFICO DAS EVIDÊNCIAS (${fotos.length})`, y);
             
             let x = 14;
             const colWidth = 85; 
@@ -211,8 +214,7 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
 
             for (const foto of fotos) {
                 try {
-                    const imgUrl = getMediaUrl(foto);
-                    const imgBase64 = await loadImageBase64(imgUrl);
+                    const imgData = await getImageDataAsJpeg(getMediaUrl(foto));
 
                     if (count % 2 === 0 && count > 0) {
                         y += rowHeight + 8;
@@ -223,33 +225,31 @@ export const gerarPDFTicket = async (ticket: Partial<EventoLPR>) => {
                         }
                     }
 
-                    // Verifica qual formato usar para não quebrar (ajusta de acordo com a extensão)
-                    const format = imgUrl.toLowerCase().endsWith('.png') ? 'PNG' : 'JPEG';
-                    doc.addImage(imgBase64, format, x, y, colWidth, rowHeight);
+                    doc.addImage(imgData, 'JPEG', x, y, colWidth, rowHeight);
                     doc.setDrawColor(200, 200, 200);
                     doc.rect(x, y, colWidth, rowHeight);
 
                     x += colWidth + 12; 
                     count++;
                 } catch (e) {
-                    console.warn(`Erro ao carregar foto: ${foto}`);
+                    console.warn(`Erro ao carregar foto: ${foto}`, e);
                 }
             }
             if (count > 0) y += rowHeight + 20;
         }
     }
 
-   if (y > height - 40) { doc.addPage(); y = 30; }
+    // ASSINATURAS E RODAPÉ
+    if (y > height - 40) { doc.addPage(); y = 30; }
     doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5);
     doc.line(25, y, 85, y); doc.line(125, y, 185, y);
     doc.setFontSize(8);
     doc.text("Responsável Técnico / Classificador", 55, y + 4, { align: 'center' });
     doc.text("Motorista / Representante do Fornecedor", 155, y + 4, { align: 'center' });
 
-    // RODAPÉ
     try {
-        const logoIaBase64 = await loadImageBase64('/IanorthLog.png'); 
-        doc.addImage(logoIaBase64, 'PNG', 14, height - 15, 30, 5); 
+        const logoIaData = await getImageDataAsJpeg('/IanorthLog.png'); 
+        doc.addImage(logoIaData, 'JPEG', 14, height - 15, 30, 5); 
     } catch (e) {}
     
     doc.setFontSize(7); doc.setTextColor(150, 150, 150);
