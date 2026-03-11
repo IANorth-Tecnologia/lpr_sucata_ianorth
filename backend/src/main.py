@@ -8,7 +8,7 @@ import time
 import threading
 from requests.auth import HTTPDigestAuth
 
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, FileResponse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -83,7 +83,12 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-app.mount("/imagens", StaticFiles(directory=STATIC_DIR), name="imagens")
+@app.get("/imagens/{pasta}/{nome_arquivo}")
+def servir_midia_cors(pasta: str, nome_arquivo: str):
+    caminho = os.path.join(STATIC_DIR, pasta, nome_arquivo)
+    if not os.path.exists(caminho):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    return FileResponse(caminho)
 
 @app.get("/")
 def read_root():
