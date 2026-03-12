@@ -21,6 +21,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional, Union
+from passlib.context import CryptContext
+import jwt
 
 from src import models, database, schemas
 from src.services import sinobras
@@ -32,6 +34,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+SECRET_KEY = os.getenv("SECRET_KEY", "chave_reserva_se_o_env_falhar")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 MODO_DESENVOLVIMENTO = os.getenv("MODO_DESENVOLVIMENTO", "False").lower() == "true"
 STATIC_DIR = os.path.join("src", "static")
 
@@ -40,6 +46,8 @@ ultimas_placas_lidas = {}
 os.makedirs(os.path.join(STATIC_DIR, "snapshots"), exist_ok=True)
 
 models.Base.metadata.create_all(bind=database.engine)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 listeners_ativos = []
 
@@ -50,10 +58,27 @@ def get_db():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Iniciando Listener LPR Intelbras...")
-    global listeners_ativos
+    print("Iniciando Sistema e verificando Usuários...")
 
     db = database.SessionLocal()
+    try:
+        admin = db.query(models.Usuario).filter(models.Usuario.username == "admin").first()
+        if not admin:
+            print("Criando usuário Gerência padrão...")
+            senha_criptografada = pwd_context.hash("admin123")
+            novo_admin = models.Usuario(
+                nome="Gestão", 
+                username="admin", 
+                senha_hash=senha_criptografada, 
+                role="admin"
+            )
+            db.add(novo_admin)
+            db.commit()
+    finally:
+        db.close()
+
+    global listeners_ativos
+
     config = db.query(models.CameraConfig).first()
     db.close()
     if config and config.is_active and config.ip_address:
@@ -82,6 +107,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/login")
+def fazer_login(dados: LoginRequest, db: Session = Depends(get_db)):
+    usuario = db.query(models.Usuario).filter(models.Usuario.username == dados.username).first()
+    
+    if not usuario or not pwd_context.verify(dados.password, usuario.senha_hash):
+        raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
+    
+    token_data = {
+        "sub": usuario.username, 
+        "role": usuario.role, 
+        "nome": usuario.nome
+    }
+    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+    
+    return {
+        "access_token": token, 
+        "token_type": "bearer", 
+        "user": {
+            "nome": usuario.nome, 
+            "role": usuario.role, 
+            "username": usuario.username
+        }
+    }
 
 @app.get("/imagens/{pasta}/{nome_arquivo}")
 def servir_midia_cors(pasta: str, nome_arquivo: str):
