@@ -59,14 +59,13 @@ class CameraConfig(Base):
     password = Column(String(100))
     is_active = Column(Boolean, default=True)
 
-
 class Usuario(Base):
-    __tablename__ = "usuarios"
+    __tablename__ = "usuarios_v2"
 
     id = Column(Integer, primary_key=True, index=True)
-    nome = Column(String, nullable=False)
-    matricula = Column(String, unique=True, index=True, nullable=False)
-    cpf = Column(String, unique=True, nullable=True)
-    senha_hash = Column(String, nullable=False)
-    role = Column(String, default="classificador")
+    nome = Column(String(150), nullable=False)
+    matricula = Column(String(50), unique=True, index=True, nullable=False)
+    cpf = Column(String(20), unique=True, nullable=True)
+    senha_hash = Column(String(255), nullable=False)
+    role = Column(String(20), default="classificador")
     is_active = Column(Boolean, default=True)
