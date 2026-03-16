@@ -65,6 +65,8 @@ class Usuario(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
-    username = Column(String, unique=True, index=True, nullable=False)
+    matricula = Column(String, unique=True, index=True, nullable=False)
+    cpf = Column(String, unique=True, nullable=True)
     senha_hash = Column(String, nullable=False)
     role = Column(String, default="classificador")
+    is_active = Column(Boolean, default=True)

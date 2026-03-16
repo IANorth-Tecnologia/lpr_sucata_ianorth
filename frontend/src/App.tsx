@@ -1,30 +1,61 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from './context/ThemeContext';
-import { MainLayout } from './components/layout/MainLayout';
+import React, { useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { MainLayout } from './components/layout/MainLayout'; 
 import { Dashboard } from './pages/Dashboard';
-import { TicketDetails } from './pages/TicketDetails';
-import { Settings } from './pages/Settings';
 import { History } from './pages/History';
-import { Reports } from './pages/Reports';
+import { Settings } from './pages/Settings';
+import { Login } from './pages/Login';
+import { AuthContext, AuthProvider } from '../contexts/AuthContext';
 
-function App() {
+const ProtectedLayout = () => {
+  const { user, loading } = useContext(AuthContext);
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+        <div className="text-slate-600 dark:text-slate-300 font-bold flex flex-col items-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+            Carregando o Sistema...
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <MainLayout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
+    <MainLayout>
+      <Outlet />
+    </MainLayout>
+  );
+};
 
-            <Route path="/history" element={<History />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="relatorios" element={<Reports />}/>
-            
-            <Route path="/ticket/:id" element={<TicketDetails />} />
-          </Routes>
-        </MainLayout>
-      </BrowserRouter>
-    </ThemeProvider>
+function AppRoutes() {
+  const { user } = useContext(AuthContext);
+
+  return (
+    <Routes>
+      {/* Rota Pública */}
+      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+
+      {/* Todas estas rotas exigem a password correta */}
+      <Route element={<ProtectedLayout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+    </Routes>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </AuthProvider>
+  );
+}

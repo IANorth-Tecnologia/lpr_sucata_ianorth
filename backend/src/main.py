@@ -62,13 +62,13 @@ async def lifespan(app: FastAPI):
 
     db = database.SessionLocal()
     try:
-        admin = db.query(models.Usuario).filter(models.Usuario.username == "admin").first()
+        admin = db.query(models.Usuario).filter(models.Usuario.matricula == "admin").first()
         if not admin:
             print("Criando usuário Gerência padrão...")
             senha_criptografada = pwd_context.hash("admin123")
             novo_admin = models.Usuario(
-                nome="Gestão", 
-                username="admin", 
+                nome="Gestão / Diretoria ", 
+                matricula="admin", 
                 senha_hash=senha_criptografada, 
                 role="admin"
             )
@@ -110,19 +110,23 @@ app.add_middleware(
 
 
 class LoginRequest(BaseModel):
-    username: str
+    login: str
     password: str
 
 
 @app.post("/api/auth/login")
 def fazer_login(dados: LoginRequest, db: Session = Depends(get_db)):
-    usuario = db.query(models.Usuario).filter(models.Usuario.username == dados.username).first()
+    usuario = db.query(models.Usuario).filter(
+        or_(models.Usuario.matricula == dados.login, models.Usuario.cpf == dados.login)).first()
     
     if not usuario or not pwd_context.verify(dados.password, usuario.senha_hash):
-        raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
+        raise HTTPException(status_code=401, detail="Matrícula/CPF ou senha incorretos")
     
+    if not usuario.is_active:
+        raise HTTPException(status_code=403, detail="Acesso bloqueado. Procure a gerência.")
+
     token_data = {
-        "sub": usuario.username, 
+        "sub": usuario.matricula, 
         "role": usuario.role, 
         "nome": usuario.nome
     }
@@ -134,9 +138,51 @@ def fazer_login(dados: LoginRequest, db: Session = Depends(get_db)):
         "user": {
             "nome": usuario.nome, 
             "role": usuario.role, 
-            "username": usuario.username
+            "matricula": usuario.matricula
         }
     }
+
+@app.get("/api/usuarios", response_model=List[schemas.UsuarioResponse])
+def listar_usuarios(db: Session = Depends(get_db)):
+    return db.query(models.Usuario).all()
+
+@app.post("/api/usuarios", response_model=schemas.UsuarioResponse)
+def criar_usuario(dados: schemas.UsuarioCreate, db: Session = Depends(get_db)):
+    if db.query(models.Usuario).filter((models.Usuario.matricula == dados.matricula)).first():
+        raise HTTPException(status_code=400, detail="Matrícula já cadastrada")
+    
+    novo_usuario = models.Usuario(
+        nome=dados.nome,
+        matricula=dados.matricula,
+        cpf=dados.cpf,
+        senha_hash=pwd_context.hash(dados.password),
+        role=dados.role
+    )
+    db.add(novo_usuario)
+    db.commit()
+    db.refresh(novo_usuario)
+    return novo_usuario
+
+@app.put("/api/usuarios/{usuario_id}/status")
+def alterar_status_usuario(usuario_id: int, db: Session = Depends(get_db)):
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == usuario_id).first()
+    if not usuario: raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    usuario.is_active = not usuario.is_active
+    db.commit()
+    return {"status": "sucesso", "is_active": usuario.is_active}
+
+@app.put("/api/usuarios/{usuario_id}/reset-senha")
+def resetar_senha(usuario_id: int, dados: schemas.PasswordReset, db: Session = Depends(get_db)):
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == usuario_id).first()
+    if not usuario: raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    usuario.senha_hash = pwd_context.hash(dados.nova_senha)
+    db.commit()
+    return {"status": "Senha redefinida com sucesso"}
+
+
+
 
 @app.get("/imagens/{pasta}/{nome_arquivo}")
 def servir_midia_cors(pasta: str, nome_arquivo: str):
