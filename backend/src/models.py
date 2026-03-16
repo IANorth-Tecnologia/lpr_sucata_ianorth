@@ -1,3 +1,4 @@
+from enum import unique
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from src.database import Base
 from datetime import datetime
@@ -56,4 +57,16 @@ class CameraConfig(Base):
     ip_address = Column(String(50))
     username = Column(String(100))
     password = Column(String(100))
+    is_active = Column(Boolean, default=True)
+
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    matricula = Column(String, unique=True, index=True, nullable=False)
+    cpf = Column(String, unique=True, nullable=True)
+    senha_hash = Column(String, nullable=False)
+    role = Column(String, default="classificador")
     is_active = Column(Boolean, default=True)

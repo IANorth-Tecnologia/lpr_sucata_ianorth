@@ -23,3 +23,5 @@ pyodbc
 python-multipart
 pandas
 openpyxl
+passlib[bcrypt]
+PyJWT

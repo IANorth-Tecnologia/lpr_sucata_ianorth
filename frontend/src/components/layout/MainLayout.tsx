@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext'; 
 import { 
     Sun, Moon, LayoutDashboard, Menu, X, ChevronLeft, 
     BarChart3, Settings, LogOut, History 
 } from 'lucide-react';
+import { AuthContext } from '../../../contexts/AuthContext';
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useContext(AuthContext); 
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -31,39 +33,38 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 px-3 space-y-1 mt-6 overflow-y-auto">
-            
             <NavItem 
                 icon={<LayoutDashboard size={20}/>} 
                 label="Dashboard" 
                 active={location.pathname === '/'}
                 onClick={() => navigate('/')}   
             />
-
             <NavItem 
                 icon={<History size={20}/>} 
                 label="Histórico" 
                 active={location.pathname.includes('/history')}
                 onClick={() => navigate('/history')}   
             />
-
             <NavItem 
                 icon={<BarChart3 size={20}/>} 
                 label="Relatórios" 
                 active={location.pathname.includes('/relatorios')}
                 onClick={() => navigate('/relatorios')}   
             />
-
-            <NavItem 
-                icon={<Settings size={20}/>} 
-                label="Configurações" 
-                active={location.pathname.includes('/settings')}
-                onClick={() => navigate('/settings')}   
-            />
+            {/* Mostra as configurações apenas se for admin */}
+            {user?.role === 'admin' && (
+                <NavItem 
+                    icon={<Settings size={20}/>} 
+                    label="Configurações" 
+                    active={location.pathname.includes('/settings')}
+                    onClick={() => navigate('/settings')}   
+                />
+            )}
         </nav>
 
         <div className="p-4 border-t border-light-border dark:border-dark-border">
             <button 
-                onClick={() => console.log("Logout")} 
+                onClick={logout} 
                 className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
                 <LogOut size={20} />
@@ -74,7 +75,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        
         <header className="h-16 bg-light-surface dark:bg-dark-surface border-b border-light-border dark:border-dark-border flex items-center justify-between px-6 shadow-sm z-10">
             <div className="flex items-center gap-4">
                 <button 
@@ -91,8 +91,14 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
             
             <div className="flex items-center gap-4">
+                {/* NOME DO USUÁRIO LOGADO NO TOPO */}
+                <div className="hidden md:flex flex-col items-end mr-2">
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{user?.nome || 'Operador'}</span>
+                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{user?.role || 'Acesso Restrito'}</span>
+                </div>
+
                 <span className="hidden md:inline-block text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full border border-green-200 animate-pulse">
-                    ● Sistema Online
+                    ● Online
                 </span>
                 <button 
                     onClick={toggleTheme}

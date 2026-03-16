@@ -67,3 +67,26 @@ class EventoLPRResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UsuarioCreate(BaseModel):
+    nome: str
+    matricula: str
+    cpf: Optional[str] = None
+    password: str
+    role: str = "classificador"
+
+
+class UsuarioResponse(BaseModel):
+    id: int
+    nome: str
+    matricula: str
+    cpf: Optional[str] = None
+    role: str
+    is_active: bool 
+
+    class Config:
+        from_attributes = True
+
+
+class PasswordReset(BaseModel):
+    nova_senha: str
