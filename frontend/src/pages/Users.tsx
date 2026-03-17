@@ -158,7 +158,7 @@ export function Users() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Palavra-Passe *</label>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Senha *</label>
                                     <input type="text" required value={novoUser.password} onChange={e => setNovoUser({...novoUser, password: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" placeholder="Senha inicial"/>
                                 </div>
                                 <div>
@@ -166,7 +166,9 @@ export function Users() {
                                     <select value={novoUser.role} onChange={e => setNovoUser({...novoUser, role: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
                                         <option value="classificador">Classificador (Padrão)</option>
                                         <option value="admin">Administrador (Gestão)</option>
-                                        <div>
+                                    </select>
+                                </div>
+                                <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cargo / Função *</label>
                                             <input 
                                                 type="text" 
@@ -177,8 +179,8 @@ export function Users() {
                                                 placeholder="Ex: Operador de Máquinas"
                                             />
                                         </div>
-                                    </select>
-                                </div>
+
+
                             </div>
                             <div className="pt-4 flex gap-3">
                                 <button type="button" onClick={() => setModalNovo(false)} className="flex-1 py-2.5 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition">Cancelar</button>
@@ -193,12 +195,12 @@ export function Users() {
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-slide-up">
                         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-yellow-50 dark:bg-yellow-900/20">
-                            <h3 className="font-bold text-yellow-800 dark:text-yellow-500 flex items-center gap-2"><Key size={18}/> Resetar Palavra-Passe</h3>
+                            <h3 className="font-bold text-yellow-800 dark:text-yellow-500 flex items-center gap-2"><Key size={18}/> Resetar Senha</h3>
                             <button onClick={() => setModalSenha({aberto: false, userId: null, nome: ''})} className="text-slate-400 hover:text-red-500"><X size={20}/></button>
                         </div>
                         <form onSubmit={handleResetSenha} className="p-6 space-y-4">
                             <p className="text-sm text-slate-600 dark:text-slate-400">Defina uma nova senha para <b>{modalSenha.nome}</b>:</p>
-                            <input type="text" required autoFocus value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-yellow-500 dark:text-white" placeholder="Nova palavra-passe"/>
+                            <input type="text" required autoFocus value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-yellow-500 dark:text-white" placeholder="Nova Senha"/>
                             <button type="submit" className="w-full py-2.5 rounded-lg font-bold text-white bg-yellow-600 hover:bg-yellow-700 transition mt-2">Atualizar Credenciais</button>
                         </form>
                     </div>
