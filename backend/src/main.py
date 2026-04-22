@@ -1,5 +1,6 @@
 import sys
 import os
+import glob
 import shutil
 import requests
 import urllib.parse
@@ -223,7 +224,7 @@ def processar_evento_camera(placa: str, origem: str):
     t.daemon = True
     t.start()
 
-def _processamento_com_tentativas(placa: str, origem: str):
+def _processamento_com_tentativas(placa: str, origem: str, user: str = "admin", password: str = "admin" ):
     print(f"Nova placa detectada: {placa} via {origem}. Iniciando auditoria...")
 
     global ultimas_placas_lidas
@@ -237,6 +238,34 @@ def _processamento_com_tentativas(placa: str, origem: str):
 
 
     ultimas_placas_lidas[placa] = agora
+
+    timestamp_str = agora.strftime("%Y-%m-%d %H:%M:%S")
+    timestamp_file = agora.strftime("%Y%m%d_%H%M%S")
+
+    nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
+    nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
+    ip_real_camera = origem.replace("Cam-", "")
+
+    threading.Thread(
+        target=gravar_video_evento,
+        args=(ip_real_camera, user, password, nome_arquivo_video, 15),
+        daemon=True
+    ).start()
+
+    def capturar_foto_atrasada():
+        print(f"[{placa}] Câmera engatilhada. Aguardando 6s para fotografar a carroceria...")
+        time.sleep(4)
+        try:
+            salvar_snapshot_camera(ip_real_camera, user, password, placa, nome_fixo=nome_arquivo_video )
+            print(f"[{placa}] Foto da carroceria salva com sucesso!")
+        except Exception as e:
+            print(f"[{placa}] Falha ao salvar foto: {e}")
+
+    threading.Thread(target=capturar_foto_atrasada, daemon=True).start()
+
+    final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
+    final_video_url = f"/imagens/videos/{nome_arquivo_video}"
+
 
     max_tentativas = 6
     intervalo_segundos = 15
@@ -273,32 +302,9 @@ def _processamento_com_tentativas(placa: str, origem: str):
             del ultimas_placas_lidas[placa]
         return
 
-    ultimas_placas_lidas[placa] = datetime.now()
-
-    timestamp_str = agora.strftime("%Y-%m-%d %H:%M:%S")
-    timestamp_file = agora.strftime("%Y%m%d_%H%M%S")
 
     db = database.SessionLocal()
     try:
-        config = db.query(models.CameraConfig).first()
-        
-        final_snapshot_url = None
-        final_video_url = None
-
-        if config and config.is_active:
-            try:
-                nome_arquivo_foto = f"{placa}_{timestamp_file}.jpg"
-                nome_arquivo_video = f"{placa}_{timestamp_file}.mp4"
-                ip_real_camera = origem.replace("Cam-", "")
-
-                salvar_snapshot_camera(ip_real_camera, config.username, config.password, placa, nome_fixo=nome_arquivo_foto)
-                final_snapshot_url = f"/imagens/snapshots/{nome_arquivo_foto}"
-                
-                gravar_video_evento(ip_real_camera, config.username, config.password, nome_arquivo_video, duracao=15)
-                final_video_url = f"/imagens/videos/{nome_arquivo_video}"
-            except Exception as e:
-                print(f"Erro de mídia: {e}")
-
         try:
             dt_obj = datetime.fromisoformat(raw_date)
             data_formatada = dt_obj.strftime("%d/%m/%Y %H:%M")
