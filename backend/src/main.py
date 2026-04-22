@@ -254,7 +254,7 @@ def _processamento_com_tentativas(placa: str, origem: str, user: str = "admin", 
 
     def capturar_foto_atrasada():
         print(f"[{placa}] Câmera engatilhada. Aguardando 1s para fotografar a carroceria...")
-        time.sleep(1)
+        time.sleep(0.5)
         try:
             salvar_snapshot_camera(ip_real_camera, user, password, placa, nome_fixo=nome_arquivo_foto )
             print(f"[{placa}] Foto da carroceria salva com sucesso!")
