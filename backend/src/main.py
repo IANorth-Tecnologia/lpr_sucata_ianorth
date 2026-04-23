@@ -364,6 +364,55 @@ def reload_camera_service():
     finally:
         db.close() 
 
+
+def limpar_arquivos_antigos():
+    """Remove APENAS snapshots e vídeos ÓRFÃOS com mais de 7 dias."""
+    db = database.SessionLocal()
+    try:
+        agora = time.time()
+        limite_segundos = 3 * 24 * 60 * 60  # 3 dias
+        
+        eventos = db.query(models.EventoVMS).all()
+        arquivos_protegidos = set()
+        
+        for e in eventos:
+            if e.snapshot_url:
+                arquivos_protegidos.add(os.path.basename(e.snapshot_url))
+            if e.video_url:
+                arquivos_protegidos.add(os.path.basename(e.video_url))
+            if e.fotos_avaria:
+                for foto in e.fotos_avaria.split(','):
+                    arquivos_protegidos.add(os.path.basename(foto))
+                    
+        pastas = [
+            os.path.join(STATIC_DIR, "snapshots"),
+            os.path.join(STATIC_DIR, "videos")
+        ]
+        
+        removidos = 0
+        for pasta in pastas:
+            if not os.path.exists(pasta): continue
+            
+            for arquivo in os.listdir(pasta):
+                caminho = os.path.join(pasta, arquivo)
+                if not os.path.isfile(caminho): continue
+                
+                if arquivo in arquivos_protegidos:
+                    continue
+                    
+                if (agora - os.path.getmtime(caminho)) > limite_segundos:
+                    os.remove(caminho)
+                    removidos += 1
+                    
+        if removidos > 0:
+            print(f"Manutenção Inteligente: {removidos} arquivos órfãos removidos (Tickets protegidos!).")
+    except Exception as e:
+        print(f"Erro na limpeza de arquivos: {e}")
+    finally:
+        db.close()
+
+
+
 # ROTAS DA CÂMERA LPR - BANCO DE DADOS
 
 @app.get("/config/camera", response_model=schemas.CameraConfigSchema)

@@ -124,7 +124,17 @@ export function ClassificationCalculator({ formData, setFormData, ticket, isFina
     let statusBg = "bg-slate-100 dark:bg-slate-800 border-slate-200";
     let icone = <Scale size={14}/>;
 
+    const diferecaPeso = Math.abs(totalPesoInformado - pesoLiquido);
+
     if (totalPesoInformado > 0 && vol > 0) {
+        // Se o peso não bate com a balança, está divergente
+        if (diferecaPeso > 5) {
+            statusTexto = "PESO DIVERGENTE";
+            statusCor = "text-amber-700 dark:text-amber-200";
+            statusBg = "bg-amber-100 dark:bg-amber-900/50 border-amber-300";
+            icone = <AlertTriangle size={14}/>;
+        }
+        // Se o peso bate, verificamos a qualidade (R.I.M e Faixa)
         if (mediaImpurezaFinal > 3.0) {
             statusTexto = `ALERTA R.I.M. (${mediaImpurezaFinal.toFixed(1)}%)`;
             statusCor = "text-red-700 dark:text-red-100";
@@ -322,6 +332,12 @@ totalPesoInformado > pesoLiquido
                                 </div>
                             )}
 
+                        <div className="mt-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 py-1 rounded border border-slate-100 dark:border-slate-700">
+                            Impureza Média: <span className={mediaImpurezaFinal > 3 ? 'text-red-500' : 'text-blue-500'}>
+                                {mediaImpurezaFinal.toFixed(2)}%
+                            </span>
+                        </div>
+
                         <div className="mt-4 flex justify-between items-end border-b border-slate-100 dark:border-slate-700 pb-2">
                             <span className="text-[10px] text-slate-400">Densidade Global</span>
                             <span className="text-xl font-mono font-bold text-slate-700 dark:text-white">{densidade.toFixed(3)}</span>
@@ -342,8 +358,14 @@ totalPesoInformado > pesoLiquido
             </div>
 
             <div className="px-6 pb-6 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-slate-700 pt-4">
-                <TruckVisualizer materiais={materiais} />
+                <TruckVisualizer materiais={materiais} mediaImpureza={mediaImpurezaFinal} />
             </div>
+            <div className="pr-4 text-right hidden lg:block">
+        <span className="text-[10px] font-bold text-slate-400 uppercase block">Média de Contaminação</span>
+        <span className="text-2xl font-mono font-bold text-slate-600 dark:text-slate-300">
+            {mediaImpurezaFinal.toFixed(1)}%
+        </span>
+    </div>
         </div>
     );
 }

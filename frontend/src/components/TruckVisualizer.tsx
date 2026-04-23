@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 
+
 interface MaterialItem {
   tipo: string;
   peso: number;
@@ -8,6 +9,7 @@ interface MaterialItem {
 
 interface TruckProps {
   materiais: MaterialItem[];
+  mediaImpureza?: number;
 }
 
 const COLORS = [
@@ -19,7 +21,7 @@ const COLORS = [
   "from-red-600 to-red-500",
 ];
 
-export function TruckVisualizer({ materiais }: TruckProps) {
+export function TruckVisualizer({ materiais, mediaImpureza = 0}: TruckProps) {
   const normalized = useMemo(() => {
     const cleaned = materiais.map((m) => ({
       ...m,
@@ -150,6 +152,7 @@ export function TruckVisualizer({ materiais }: TruckProps) {
           alt="Caminhão"
           className="absolute inset-0 w-full h-full object-contain z-10 pointer-events-none"
         />
+
       </div>
     </div>
   );
