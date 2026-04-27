@@ -1,0 +1,59 @@
+{
+  "name": "lpr-sucata-ianorth",
+  "description": "License Plate Recognition (LPR) system for vehicle tracking and scrap management",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "homepage": "http://192.168.1.82:8020",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" --names frontend,backend --prefix-colors cyan,yellow",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:frontend-only": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "lint": "cd frontend && npm run lint",
+    "type-check": "tsc -b tsconfig.json --noEmit",
+    "preview": "cd frontend && npm run preview",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "docker:logs": "docker-compose logs -f",
+    "docker:logs:backend": "docker-compose logs -f backend",
+    "docker:logs:frontend": "docker-compose logs -f frontend",
+    "install:all": "npm install && cd frontend && npm install && echo 'Install Python dependencies: pip install -r backend/requirements.txt'",
+    "setup:dev": "npm install:all && echo 'Backend Python install: pip install -r backend/requirements.txt'",
+    "clean": "rm -rf frontend/dist frontend/node_modules node_modules && rm -rf backend/__pycache__ backend/src/__pycache__"
+  },
+  "dependencies": {
+    "concurrently": "^9.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "keywords": [
+    "lpr",
+    "license-plate-recognition",
+    "vehicle-tracking",
+    "scrap-management",
+    "fastapi",
+    "react",
+    "typescript"
+  ],
+  "author": "IANorth Tecnologia",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IANorth-Tecnologia/lpr_sucata_ianorth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IANorth-Tecnologia/lpr_sucata_ianorth/issues"
+  }
+}
